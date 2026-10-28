@@ -1,11 +1,12 @@
 # Checkout line endings are part of what CI executes, so they are pinned here
 # rather than left to each machine's core.autocrlf setting.
 #
-# Two failures in this repository came from this: a Windows checkout that
+# Three failures in this repository came from this: a Windows checkout that
 # converts a shell script to CRLF cannot run it (`bash` rejects the trailing
-# `\r` on the first real line), and a workflow file read as text no longer
-# matches the step markers the release tests look for. Both were worked around
-# in the reader; this file removes the cause.
+# `\r` on the first real line), a workflow file read as text no longer matches
+# the step markers the release tests look for, and the dashboard bundle rebuilt
+# in place stopped matching the CRLF checkout it replaced. The first two were
+# worked around in the reader; this file removes the cause of all three.
 #
 # PowerShell is deliberately not listed: Windows PowerShell and PowerShell 7
 # accept either ending, and a CRLF checkout is what a Windows author expects.
@@ -22,3 +23,11 @@
 *.tsx  text eol=lf
 *.css  text eol=lf
 *.html text eol=lf
+# `vite build` writes the embedded dashboard into the version-controlled
+# internal/gateway/assets, replacing files that are committed as build output. A
+# checkout with core.autocrlf=true would materialise the bundle with CRLF and the
+# rebuild would write LF back: git compares the same normalised bytes, but the
+# on-disk size differs, so `git status --porcelain` reports a modification and
+# `radanor-version -release` refuses the exact `vX.Y.Z` tag it was asked to
+# build. Pinning the bundle to LF makes the rebuild byte-identical everywhere.
+*.js   text eol=lf

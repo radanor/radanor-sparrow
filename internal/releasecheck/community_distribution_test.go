@@ -1,8 +1,11 @@
 package releasecheck
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -131,6 +134,103 @@ func TestSignedReleaseWorkflowIsUntouchedByTheUnsignedPath(t *testing.T) {
 	if strings.Contains(release, "community-release") {
 		t.Error("release.yml references the community environment; the two processes must not share reviewers or variables")
 	}
+}
+
+// TestDashboardBuildLeavesAWindowsCheckoutClean pins the property the Windows
+// artifact job depends on: `vite build` writes the embedded dashboard back into
+// the version-controlled directory internal/gateway/assets, replacing files that
+// are committed as build output, so every tracked text file there must be
+// checked out with LF on every platform.
+//
+// It is not cosmetic, and it is not about the dirty-tree rule being too strict.
+// git itself reported the file as modified: a checkout with core.autocrlf=true
+// materialises the bundle with CRLF, the rebuild writes it back with LF, and
+// although the normalised bytes are identical the on-disk size is not, so
+// `git status --porcelain` lists it and `radanor-version -release` refuses the
+// exact `vX.Y.Z` tag it was asked to build. That is how the first Community
+// Windows job failed on v0.1.0, after the portable executable had already been
+// built from the same clean tree.
+//
+// Binary files are skipped rather than exempted: git never converts them, so
+// their checkout and the copied-through build output cannot disagree.
+func TestDashboardBuildLeavesAWindowsCheckoutClean(t *testing.T) {
+	root := repoRoot(t)
+	output := viteDashboardOutput(t, root)
+	tracked := trackedFilesUnder(t, root, output)
+	if len(tracked) == 0 {
+		t.Skipf("%s is not version-controlled, so the dashboard build writes only ignored files and no checkout can go dirty", output)
+	}
+	for _, file := range tracked {
+		raw, err := os.ReadFile(filepath.Join(root, file))
+		if err != nil {
+			t.Errorf("cannot read %s: %v", file, err)
+			continue
+		}
+		if bytes.IndexByte(raw, 0) >= 0 {
+			continue
+		}
+		if got := gitAttribute(t, root, "eol", file); got != "lf" {
+			t.Errorf("%s is a text file the dashboard build rewrites, but its checkout line ending is %q, not \"lf\": with core.autocrlf=true a Windows checkout materialises it as CRLF, the rebuild writes LF, and `git status` reports it modified, so radanor-version refuses an exact vX.Y.Z tag. Give it an `eol=lf` rule in .gitattributes.", file, got)
+		}
+	}
+}
+
+// viteDashboardOutput reads the directory `vite build` writes into from the build
+// configuration, so this test follows the build instead of hard-coding a path a
+// later change could silently move.
+func viteDashboardOutput(t *testing.T, root string) string {
+	t.Helper()
+	config := filepath.Join(root, "web", "vite.config.ts")
+	raw, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatalf("cannot read %s: %v", config, err)
+	}
+	match := regexp.MustCompile(`outDir:\s*"([^"]+)"`).FindStringSubmatch(string(raw))
+	if match == nil {
+		t.Fatalf("%s no longer names an outDir, so the dashboard build's output location is unknown", config)
+	}
+	if filepath.IsAbs(match[1]) {
+		t.Fatalf("outDir %q is absolute, which would place the dashboard outside the checkout", match[1])
+	}
+	return filepath.Clean(filepath.Join("web", match[1]))
+}
+
+// trackedFilesUnder lists the repository's tracked files below a directory. It
+// skips where git or the checkout is unavailable, matching the version rule's own
+// tests: the property is about a git checkout, and a source export is not one.
+func trackedFilesUnder(t *testing.T, root, dir string) []string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", root, "ls-files", "--", dir).Output()
+	if err != nil {
+		if _, lookErr := exec.LookPath("git"); lookErr != nil {
+			t.Skip("git is not available, so the checkout's attributes cannot be read")
+		}
+		t.Skipf("%s is not a git checkout, so it has no checkout attributes", root)
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			files = append(files, line)
+		}
+	}
+	return files
+}
+
+// gitAttribute reports one attribute's effective value for a path, as git
+// resolves it from the checkout rather than from how this machine happens to
+// have the file on disk.
+func gitAttribute(t *testing.T, root, attribute, path string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", root, "check-attr", attribute, "--", path).Output()
+	if err != nil {
+		t.Fatalf("git check-attr %s for %s: %v", attribute, path, err)
+	}
+	// "<path>: <attribute>: <value>", where the value is the final field.
+	fields := strings.Split(strings.TrimSpace(string(out)), ": ")
+	if len(fields) < 3 {
+		t.Fatalf("cannot read the %s attribute of %s from %q", attribute, path, strings.TrimSpace(string(out)))
+	}
+	return fields[len(fields)-1]
 }
 
 // TestCommunityPolicyIsProposedAndUnapprovedUntilAHumanSignsIt pins the honesty of
