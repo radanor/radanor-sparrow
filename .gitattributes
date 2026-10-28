@@ -1,0 +1,24 @@
+# Checkout line endings are part of what CI executes, so they are pinned here
+# rather than left to each machine's core.autocrlf setting.
+#
+# Two failures in this repository came from this: a Windows checkout that
+# converts a shell script to CRLF cannot run it (`bash` rejects the trailing
+# `\r` on the first real line), and a workflow file read as text no longer
+# matches the step markers the release tests look for. Both were worked around
+# in the reader; this file removes the cause.
+#
+# PowerShell is deliberately not listed: Windows PowerShell and PowerShell 7
+# accept either ending, and a CRLF checkout is what a Windows author expects.
+# Binary assets are not listed either, so nothing is renormalised by accident.
+*.sh   text eol=lf
+*.bash text eol=lf
+*.nsi  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.go   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.css  text eol=lf
+*.html text eol=lf

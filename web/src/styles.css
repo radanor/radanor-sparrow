@@ -1,0 +1,338 @@
+/* Radanor Sparrow Community Edition dashboard.
+   Colours are defined once as variables so the whole dashboard can switch
+   between the dark and light palettes. The dark palette is the default; the
+   light palette applies either when the user chose it, or when the user chose
+   "match system" and the operating system reports a light preference. */
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+  color-scheme: dark;
+
+  --bg: #07100f;
+  --bg-glow: #12302a;
+  /* The surface the approved light-background logo sits on. The artwork is dark
+     navy, so on the dark palette it needs its own neutral plaque: unmodified,
+     never recoloured. Measured ink contrast 17.5:1 on this surface. */
+  --brand-surface: #eef3f1;
+  --brand-surface-border: rgba(255, 255, 255, .22);
+  --sidebar: rgba(5, 13, 12, .88);
+  --surface-a: #13221f;
+  --surface-b: #0d1715;
+  --surface-alt: #0f1b19;
+  --border: #20312d;
+  --border-strong: #203b35;
+  --border-accent: #2d5a4f;
+  --text: #e9f5f2;
+  --muted: #91a8a2;
+  --muted-dim: #708b84;
+  --teal: #53d6b7;
+  --teal-ink: #06110e;
+  --action-border: #315049;
+  --action-text: #cfe6e0;
+  --action-hover: #123029;
+  --chip-text: #b7cbc5;
+  --ok-bg: #123029;
+  --ok-fg: #53d6b7;
+  --warn-bg: #332d1c;
+  --warn-fg: #e8cb72;
+  --bad-bg: #3a1d20;
+  --bad-fg: #f0a3a8;
+  --neutral-bg: #1d2a28;
+  --neutral-fg: #aabcb8;
+  --notice-bg: #211e12;
+  --notice-border: #6b5e2f;
+  --notice-text: #c7bea0;
+  --error-border: #7e3b40;
+  --error-text: #e8a1a6;
+  --meter-track: #1b2a27;
+  --meter-fill: #53d6b7;
+  --meter-high: #e8cb72;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f7f6;
+  --bg-glow: #dff2ec;
+  /* Already a light surface, so the plaque is a deliberate white chip rather
+     than a rescue: same geometry, same unmodified artwork. */
+  --brand-surface: #ffffff;
+  --brand-surface-border: #d3e0dc;
+  --sidebar: rgba(255, 255, 255, .92);
+  --surface-a: #ffffff;
+  --surface-b: #f7fbfa;
+  --surface-alt: #eef4f2;
+  --border: #d3e0dc;
+  --border-strong: #c3d6d1;
+  --border-accent: #8dc3b6;
+  --text: #10201d;
+  --muted: #4d6560;
+  --muted-dim: #5f7772;
+  --teal: #0f766e;
+  --teal-ink: #ffffff;
+  --action-border: #b3cdc6;
+  --action-text: #12403a;
+  --action-hover: #e3f1ee;
+  --chip-text: #29433f;
+  --ok-bg: #d9f2ea;
+  --ok-fg: #0b6b5c;
+  --warn-bg: #fbf0d4;
+  --warn-fg: #7a5a05;
+  --bad-bg: #fbe3e4;
+  --bad-fg: #9c2b31;
+  --neutral-bg: #e4ecea;
+  --neutral-fg: #3f5651;
+  --notice-bg: #fdf6e0;
+  --notice-border: #d9c583;
+  --notice-text: #5c4d16;
+  --error-border: #d99aa0;
+  --error-text: #9c2b31;
+  --meter-track: #dfeae7;
+  --meter-fill: #0f766e;
+  --meter-high: #b07d05;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f4f7f6;
+    --bg-glow: #dff2ec;
+  /* Already a light surface, so the plaque is a deliberate white chip rather
+     than a rescue: same geometry, same unmodified artwork. */
+  --brand-surface: #ffffff;
+  --brand-surface-border: #d3e0dc;
+    --sidebar: rgba(255, 255, 255, .92);
+    --surface-a: #ffffff;
+    --surface-b: #f7fbfa;
+    --surface-alt: #eef4f2;
+    --border: #d3e0dc;
+    --border-strong: #c3d6d1;
+    --border-accent: #8dc3b6;
+    --text: #10201d;
+    --muted: #4d6560;
+    --muted-dim: #5f7772;
+    --teal: #0f766e;
+    --teal-ink: #ffffff;
+    --action-border: #b3cdc6;
+    --action-text: #12403a;
+    --action-hover: #e3f1ee;
+    --chip-text: #29433f;
+    --ok-bg: #d9f2ea;
+    --ok-fg: #0b6b5c;
+    --warn-bg: #fbf0d4;
+    --warn-fg: #7a5a05;
+    --bad-bg: #fbe3e4;
+    --bad-fg: #9c2b31;
+    --neutral-bg: #e4ecea;
+    --neutral-fg: #3f5651;
+    --notice-bg: #fdf6e0;
+    --notice-border: #d9c583;
+    --notice-text: #5c4d16;
+    --error-border: #d99aa0;
+    --error-text: #9c2b31;
+    --meter-track: #dfeae7;
+    --meter-fill: #0f766e;
+    --meter-high: #b07d05;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); }
+button { font: inherit; color: inherit; }
+a { color: var(--teal); }
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 10;
+  background: var(--teal); color: var(--teal-ink); padding: 10px 16px; border-radius: 0 0 8px 0; font-weight: 700;
+}
+.skip-link:focus { left: 0; }
+
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: 255px 1fr; background: radial-gradient(circle at 80% 0%, var(--bg-glow) 0, var(--bg) 38%); }
+aside { padding: 28px 18px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--sidebar); }
+.brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 28px; }
+.brand strong, .brand small { display: block; }
+.brand small { color: var(--muted); margin-top: 2px; }
+.brand-plate { flex: 0 0 auto; display: grid; place-items: center; padding: 6px 8px; border: 1px solid var(--brand-surface-border); border-radius: 10px; background: var(--brand-surface); }
+.brand-emblem { display: block; height: 30px; width: auto; }
+nav { display: grid; gap: 5px; }
+nav button { text-align: left; border: 0; border-radius: 8px; padding: 11px 12px; background: transparent; color: var(--muted); cursor: pointer; }
+nav button.active { color: var(--teal-ink); background: var(--teal); font-weight: 700; }
+nav button:hover:not(.active) { background: var(--surface-alt); }
+nav button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.privacy { margin-top: auto; color: var(--muted-dim); font-size: 12px; line-height: 1.5; padding: 8px; }
+.about { border-top: 1px solid var(--action-border); padding: 12px 8px 4px; display: grid; gap: 6px; }
+.about-plate { justify-self: start; margin-bottom: 4px; }
+.about-logo { display: block; width: 190px; max-width: 100%; height: auto; }
+.about-product { margin: 0; font-size: 12px; font-weight: 600; }
+.about-version { margin: 0; color: var(--muted); font-size: 12px; }
+/* The build variant sits under the version in the same muted type, so the About
+   area reads as one block and the development notice is legible without
+   competing with the product name. */
+.about-variant { margin: 0; color: var(--muted-dim); font-size: 11px; }
+.about-license { margin: 0; font-size: 12px; }
+.about-license a { color: var(--muted); }
+.about-notice { margin: 0; color: var(--muted-dim); font-size: 11px; line-height: 1.5; }
+
+main { padding: 40px clamp(24px, 5vw, 72px); max-width: 1350px; width: 100%; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 38px; }
+.eyebrow, .label { color: var(--teal); text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 700; }
+.edition { border: 1px solid var(--action-border); border-radius: 20px; padding: 6px 12px; color: var(--muted); }
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.nav-toggle { display: none; border: 1px solid var(--action-border); background: transparent; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+
+.notice { border: 1px solid var(--notice-border); background: var(--notice-bg); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 22px; }
+.notice span { color: var(--notice-text); }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.panel { background: linear-gradient(145deg, var(--surface-a), var(--surface-b)); border: 1px solid var(--border-strong); border-radius: 14px; padding: 24px; min-height: 220px; box-shadow: 0 18px 50px rgba(0, 0, 0, .12); }
+.panel h2 { margin: 8px 0 12px; font-size: 24px; }
+.panel p:not(.label) { color: var(--muted); line-height: 1.55; }
+.panel.error { border-color: var(--error-border); }
+
+.status { display: inline-block; margin-top: 18px; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.status.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.status.warn, .unavailable { background: var(--warn-bg); color: var(--warn-fg); }
+.status.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.status.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+
+.live { display: grid; gap: 18px; }
+.assessment { display: grid; gap: 18px; }
+.live-summary { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.live-meta { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 6px 0 0; }
+.live-error { color: var(--error-text); font-size: 13px; margin: 6px 0 0; }
+.live-warn { color: var(--warn-fg); background: var(--warn-bg); border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.55; margin: 6px 0 0; }
+.live-ok { color: var(--ok-fg); font-size: 13px; margin: 6px 0 0; }
+.live-storage { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; color: var(--muted); font-size: 13px; }
+.live-limits { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.live-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.live-sources li { border-top: 1px solid var(--border); padding-top: 12px; }
+.live-sources li:first-child { border-top: 0; padding-top: 0; }
+.live-source-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.live-source-head .status { margin-top: 0; }
+.live-gaps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 13px; line-height: 1.5; }
+.live-gaps li { border-top: 1px solid var(--border); padding-top: 10px; }
+.live-gaps li:first-child { border-top: 0; padding-top: 0; }
+.live-refresh { margin: 0; }
+
+.live-events { width: 100%; border-collapse: collapse; font-size: 13px; }
+.live-events th, .live-events td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.live-events th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+.live-events td .status { margin-top: 0; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+
+.retry { border: 1px solid var(--action-border); border-radius: 8px; background: transparent; color: var(--action-text); padding: 8px 14px; margin-top: 12px; cursor: pointer; }
+.retry:hover:not(:disabled) { background: var(--action-hover); }
+.retry:disabled { opacity: .55; cursor: not-allowed; }
+
+.scan-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.scan-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.scan-actions .retry { margin-top: 0; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.appearance-settings .chip-row { margin-top: 18px; margin-bottom: 16px; }
+.appearance-settings > .live-meta { margin-top: 0; max-width: 62ch; }
+.chip { border: 1px solid var(--action-border); border-radius: 16px; background: transparent; color: var(--chip-text); padding: 6px 12px; cursor: pointer; text-transform: capitalize; }
+.chip:hover:not(:disabled) { background: var(--action-hover); }
+.chip.active { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); font-weight: 700; }
+.chip:disabled { opacity: .55; cursor: not-allowed; }
+
+.filter-row { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); min-width: 190px; }
+.field input, .field select { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text); font: inherit; }
+.checkbox-field { flex-direction: row; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; color: var(--text); }
+.checkbox-field input { width: 18px; height: 18px; }
+
+.legend { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+.legend li { display: flex; gap: 10px; align-items: baseline; }
+.legend .status { margin-top: 0; flex: 0 0 auto; }
+
+.check-card h2 { font-size: 20px; }
+.check-card p:not(.label) { color: var(--muted); line-height: 1.55; }
+.check-body { display: grid; gap: 4px; }
+.finding-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 16px; }
+.finding-list li { border-top: 1px solid var(--border); padding-top: 14px; }
+.finding-list li:first-child { border-top: 0; padding-top: 0; }
+.detail-panel { border-color: var(--border-accent); }
+
+.evidence { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.evidence summary { cursor: pointer; color: var(--teal); font-size: 13px; font-weight: 600; }
+.evidence-meta { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.inline-note { border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* Overview ------------------------------------------------------------------
+   The Overview leads with the recorded results and the one primary action, so
+   it needs a small number of purposeful pieces: a one-line disclosure instead
+   of a banner, a compact card row, and status chips that carry a label as well
+   as a colour. */
+.disclosure { border: 1px solid var(--border-strong); background: var(--surface-alt); border-radius: 12px; padding: 10px 14px; margin-bottom: 18px; }
+.disclosure-line { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.disclosure-line strong { color: var(--text); }
+.disclosure summary { margin-top: 6px; cursor: pointer; color: var(--teal); font-size: 13px; font-weight: 600; }
+.disclosure p:not(.disclosure-line) { margin: 8px 0 0; font-size: 13px; }
+.disclosure .live-limits { margin-top: 10px; }
+
+.panel.compact { min-height: 0; }
+.panel.compact h2 { font-size: 22px; }
+.panel.posture { gap: 14px; }
+.span-2 { grid-column: span 2; }
+
+/* A row of two related summaries that belong side by side. It collapses to one
+   column with the other grids on narrow screens. */
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.posture-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.posture-summary { min-width: 0; }
+.posture-summary h2 { margin: 6px 0 8px; }
+.tone-bad h2 { color: var(--bad-fg); }
+.tone-warn h2 { color: var(--warn-fg); }
+.tone-ok h2 { color: var(--ok-fg); }
+
+.counts { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; }
+.count { display: flex; align-items: baseline; gap: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-b); padding: 8px 12px; }
+.count-value { font-size: 22px; font-weight: 700; line-height: 1; }
+.count-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+/* A zero count is real information (it shows nothing fell into that category),
+   so it stays visible but quiet rather than competing with the non-zero ones. */
+.count.quiet .count-value { color: var(--muted); }
+.count.quiet .count-label { opacity: .75; }
+.count.ok .count-value { color: var(--ok-fg); }
+.count.bad .count-value { color: var(--bad-fg); }
+.count.warn .count-value { color: var(--warn-fg); }
+.count.neutral .count-value { color: var(--neutral-fg); }
+
+.stat-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.stat-list strong { color: var(--text); }
+
+button.primary { border: 0; border-radius: 8px; padding: 12px 20px; background: var(--teal); color: var(--teal-ink); font-weight: 700; cursor: pointer; }
+button.primary:hover:not(:disabled) { filter: saturate(1.05) brightness(1.06); }
+button.primary:disabled { opacity: .55; cursor: not-allowed; }
+button.secondary { border: 1px solid var(--action-border); border-radius: 8px; padding: 10px 16px; background: transparent; color: var(--action-text); cursor: pointer; }
+button.secondary:hover:not(:disabled) { background: var(--action-hover); }
+button.secondary:disabled { opacity: .55; cursor: not-allowed; }
+.link-button { border: 0; padding: 0; background: transparent; color: var(--teal); font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+.meter-list { display: grid; gap: 18px; margin-top: 16px; }
+.meter-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.meter-head span { color: var(--muted); }
+.meter-track { height: 8px; border-radius: 6px; background: var(--meter-track); margin-top: 8px; overflow: hidden; }
+.meter-fill { height: 100%; background: var(--meter-fill); border-radius: 6px; }
+.meter-fill.high { background: var(--meter-high); }
+
+@media (max-width: 1300px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .app-shell { grid-template-columns: 1fr; }
+  aside { display: none; }
+  .app-shell.nav-open aside { display: flex; border-right: 0; border-bottom: 1px solid var(--border); }
+  .nav-toggle { display: inline-block; }
+  .grid { grid-template-columns: 1fr; }
+  .duo { grid-template-columns: 1fr; }
+  .span-2 { grid-column: auto; }
+  main { padding: 24px; }
+  h1 { font-size: 30px; }
+  .live-events th:nth-child(4), .live-events td:nth-child(4) { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

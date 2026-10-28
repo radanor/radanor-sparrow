@@ -1,0 +1,45 @@
+/bin/
+node_modules/
+.vite/
+/web/dist/
+/coverage/
+*.test
+*.out
+.DS_Store
+
+# Coding agent local state
+.freebuff/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Armored private-key exports, which sign-release.sh --armored-key accepts. Published
+# signatures (*.asc) and public keys are NOT ignored: they are part of a release.
+*-secret*.asc
+*private*.asc
+*.gpg
+
+# Local runtime databases
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Local temporary/build artifacts
+.tmp/
+dist/
+# Windows resource object generated next to the main package by
+# scripts/build-windows.ps1. It is an intermediate the linker folds in; the
+# build script removes it again, and it must never be committed.
+/cmd/radanor-sparrow/radanor_windows_*.syso
+/radanor-sparrow-core.exe
+/radanor-sparrow-gateway.exe
+# Pre-rebrand names, still ignored so an existing checkout stays clean.
+/radanor-shield-core.exe
+/radanor-shield-gateway.exe
+/RadanorShield.exe
+/radanor-shield

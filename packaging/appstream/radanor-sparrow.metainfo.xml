@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata for Radanor Sparrow Community Edition.
+
+  It describes what the installed application actually does. Nothing here is
+  aspirational: there are no screenshots (none are approved for publication yet),
+  no release history (the project has no tagged public release, and inventing a
+  release date would be worse than omitting one), and no developer identifier
+  beyond the project name.
+
+  metadata_license licenses THIS FILE, not the application. FSFAP is AppStream's
+  own recommended default for metadata whose upstream has not chosen one; the
+  project license of the application itself is the Business Source License 1.1,
+  stated below and unchanged.
+
+  The component id matches the desktop entry the package installs
+  (radanor-sparrow.desktop), which is also the icon name and the window class.
+-->
+<component type="desktop-application">
+  <id>radanor-sparrow.desktop</id>
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>BUSL-1.1</project_license>
+
+  <name>Radanor Sparrow</name>
+  <summary>Local security posture and monitoring</summary>
+
+  <description>
+    <p>
+      Radanor Sparrow Community Edition is a lightweight, local cybersecurity
+      application for one computer. It monitors file activity, assesses the
+      security posture of the local machine with evidence-backed checks, shows the
+      installed software and the listening network endpoints and services, and
+      lets the user configure the scanner.
+    </p>
+    <p>
+      Everything runs in two unprivileged local processes and nothing leaves the
+      computer. There is no account, no cloud service and no telemetry, and the
+      application never asks for administrator rights.
+    </p>
+    <ul>
+      <li>Security posture checks with the evidence that produced each result</li>
+      <li>File activity monitoring with configurable local sources</li>
+      <li>Installed software and listening endpoint inventory</li>
+      <li>Local history stored in a private SQLite database owned by the user</li>
+      <li>Native GTK/WebKitGTK window, or the authenticated dashboard in the
+        default browser where the WebKit sandbox cannot run</li>
+    </ul>
+    <p>
+      Radanor Sparrow is not antivirus and not EDR: it does not detect malware,
+      block anything, remove anything, or produce a protection score.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">radanor-sparrow.desktop</launchable>
+  <provides>
+    <binary>radanor-sparrow</binary>
+  </provides>
+
+  <categories>
+    <category>System</category>
+    <category>Security</category>
+    <category>Monitor</category>
+  </categories>
+  <keywords>
+    <keyword>security</keyword>
+    <keyword>monitoring</keyword>
+    <keyword>posture</keyword>
+    <keyword>inventory</keyword>
+  </keywords>
+
+  <url type="homepage">https://github.com/radanor/radanor-shield</url>
+  <developer>
+    <name>Radanor</name>
+  </developer>
+
+  <!-- No content of the kinds OARS covers: no advertising, no user-generated
+       content, no purchases, no violence. -->
+  <content_rating type="oars-1.1"/>
+</component>

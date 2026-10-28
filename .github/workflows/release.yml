@@ -1,0 +1,390 @@
+name: Release
+
+# Public release publication is a deliberate, manual act. This workflow is NOT
+# triggered by ordinary pushes or pull requests, so a green development CI run
+# never implies release approval. It runs the licensing release gate first and
+# fails closed: if any gate below is blocked, no release artifact is produced.
+#
+# Three gates, in order, and none of them is skippable:
+#
+#   licensing-gate        the strict BSL check: canonical licence text, a verified
+#                         Licensor, a concrete per-version Change Date inside the
+#                         four-year maximum, the Additional Use Grant, the GPLv3
+#                         Change License, and LICENSE/THIRD_PARTY_NOTICES.md in the
+#                         package. See scripts/validate-release-licensing.sh.
+#   release-authorization the protected environment's attestation, an exact vX.Y.Z
+#                         tag, a tag that names a commit on main, one version shared
+#                         by the tag and the build, and the operator's requested
+#                         version. Administrators configure the environment; the
+#                         workflow can only require it.
+#   signing               Linux OpenPGP and Windows Authenticode are mandatory. Both
+#                         fail closed when no key material is configured, so this
+#                         workflow uploads nothing until a real release is authorized.
+#
+# Pins and provenance for every action and build tool this file runs are recorded in
+# docs/deployment/RELEASE_SUPPLY_CHAIN.md; signing is described in
+# docs/deployment/RELEASE_SIGNING.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version being released (must match branding.Version)'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  licensing-gate:
+    name: Licensing release gate (fails closed)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - name: Validate release licensing metadata
+        run: go run ./cmd/radanor-release-check
+
+  release-authorization:
+    name: Verify protected release authorization
+    needs: licensing-gate
+    runs-on: ubuntu-24.04
+    # radanor-admin must create this environment, restrict it to protected v* tags,
+    # require an independent reviewer, prevent self-review where the plan supports
+    # it, and only then set its RADANOR_PRODUCTION_RELEASE_PROTECTED variable.
+    # If the private-repository plan cannot enforce those rules, leave the variable
+    # unset: the release remains deliberately blocked.
+    environment: production-release
+    env:
+      PROTECTION_ATTESTATION: ${{ vars.RADANOR_PRODUCTION_RELEASE_PROTECTED }}
+      REQUESTED_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # The ancestry check below needs the commit's history and the main line.
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - name: Require an attested protected environment and exact release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$PROTECTION_ATTESTATION" != verified ]]; then
+            echo 'production-release protection is not verified; refusing release artifacts and signing.' >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" != tag || ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release must run from an exact vX.Y.Z tag, not $GITHUB_REF_TYPE $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          version=${GITHUB_REF_NAME#v}
+          if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$version" ]]; then
+            echo "Requested version $REQUESTED_VERSION does not match tag version $version." >&2
+            exit 1
+          fi
+      - name: Require the tag to name a reviewed commit on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An environment reviewer approves a run, not a commit. Without this the
+          # operator could tag any unreviewed commit and release it. It proves the
+          # tagged commit is on the protected main line; it cannot prove that a
+          # human review of that commit happened, which stays an administrative
+          # control (see docs/deployment/RELEASE_SIGNING.md).
+          git fetch --quiet --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo 'Refusing release: the tag does not point at a commit on main.' >&2
+            exit 1
+          fi
+          # The version the tag names and the version the build will inject are one
+          # value. A mismatch would publish an artifact whose licence, installer and
+          # file names disagree with its tag.
+          built=$(go run ./cmd/radanor-version -release) || {
+            echo 'Release blocked: this checkout does not satisfy the release version rule.' >&2
+            exit 1
+          }
+          if [[ "$built" != "${GITHUB_REF_NAME#v}" ]]; then
+            echo "Refusing release: the tag names ${GITHUB_REF_NAME#v}, but this checkout builds as $built." >&2
+            exit 1
+          fi
+          echo "Authorized release candidate: $GITHUB_REF_NAME"
+
+  # A Linux release ships two different things, and they are not interchangeable:
+  #
+  #   * the AppImage is the native desktop artifact. It contains the supervisor and
+  #     the GTK/WebKitGTK window component, so it shows the dedicated window where
+  #     the host allows the WebKit sandbox and falls back to the authenticated
+  #     browser where it does not.
+  #   * the portable executable is the lightweight, browser-first form. It is one
+  #     static binary and deliberately carries no window component; it opens the
+  #     dashboard in the default browser on every host.
+  #
+  # The build fails rather than publishing a portable binary under the desktop
+  # artifact's name, so a native-window release cannot silently degrade.
+  release-artifacts:
+    name: Build release artifacts
+    needs: [licensing-gate, release-authorization]
+    environment: production-release
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    env:
+      # Approved SDK binary/hash, store identity and RFC3161 policy are protected
+      # environment configuration, not a downloaded tool or a private key.
+      RADANOR_WINDOWS_SIGNING: ${{ vars.RADANOR_WINDOWS_SIGNING }}
+      RADANOR_AUTHENTICODE_THUMBPRINT: ${{ vars.RADANOR_AUTHENTICODE_THUMBPRINT }}
+      RADANOR_TIMESTAMP_THUMBPRINT: ${{ vars.RADANOR_TIMESTAMP_THUMBPRINT }}
+      RADANOR_TIMESTAMP_URL: ${{ vars.RADANOR_TIMESTAMP_URL }}
+      RADANOR_TIMESTAMP_POLICY_OID: ${{ vars.RADANOR_TIMESTAMP_POLICY_OID }}
+      RADANOR_SIGNTOOL: ${{ vars.RADANOR_SIGNTOOL }}
+      RADANOR_SIGNTOOL_SHA256: ${{ vars.RADANOR_SIGNTOOL_SHA256 }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # Windows installer lineage checks require ancestry; Linux retains the
+          # ordinary minimal checkout.
+          fetch-depth: ${{ runner.os == 'Windows' && '0' || '1' }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build Windows release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Release
+      # The certificate-store/HSM provider must be provisioned separately in the
+      # protected environment. No production credentials are installed here.
+      - name: Require and verify signed Windows portable executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RADANOR_WINDOWS_SIGNING: ${{ vars.RADANOR_WINDOWS_SIGNING }}
+          RADANOR_AUTHENTICODE_THUMBPRINT: ${{ vars.RADANOR_AUTHENTICODE_THUMBPRINT }}
+        run: |
+          if ($env:RADANOR_WINDOWS_SIGNING -cne 'enabled') {
+            throw 'Windows production signing is not enabled; refusing an unsigned release'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RADANOR_AUTHENTICODE_THUMBPRINT)) {
+            throw 'No approved Authenticode signer thumbprint is configured'
+          }
+          $env:RADANOR_SIGNING_PORTABLE_DIR = (Resolve-Path dist/windows).Path
+          $env:RADANOR_SIGNING_HOST = (Get-Process -Id $PID).Path
+          $env:RADANOR_SIGNED_UNINSTALLER = Join-Path $env:RUNNER_TEMP ('signed-uninstaller-' + [guid]::NewGuid().ToString('N') + '.exe')
+          foreach ($name in @('RADANOR_SIGNING_PORTABLE_DIR', 'RADANOR_SIGNING_HOST', 'RADANOR_SIGNED_UNINSTALLER')) {
+            "$name=$([Environment]::GetEnvironmentVariable($name))" >> $env:GITHUB_ENV
+          }
+          ./validation/windows/Sign-SparrowWindowsArtifact.ps1 -Path dist/windows/RadanorSparrow.exe -Kind Portable
+          ./validation/windows/Assert-SparrowAuthenticode.ps1 `
+            -Path dist/windows/RadanorSparrow.exe `
+            -ExpectedSignerThumbprint $env:RADANOR_AUTHENTICODE_THUMBPRINT
+      - name: Set up verified Windows installer build tools
+        if: runner.os == 'Windows'
+        id: release-msys
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-7zip
+      - name: Build and verify Windows NSIS release installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tools = Join-Path '${{ steps.release-msys.outputs.msys2-location }}' 'ucrt64/bin'
+          $env:MAKENSIS = Join-Path $tools 'makensis.exe'
+          $env:RADANOR_7ZIP = Join-Path $tools '7z.exe'
+          $env:Path = "$tools;C:\Program Files\Git\bin;" + $env:Path
+          ./validation/windows/Initialize-SparrowNsis.ps1 `
+            -MsysRoot '${{ steps.release-msys.outputs.msys2-location }}' `
+            -CacheDirectory (Join-Path $env:RUNNER_TEMP 'p9-nsis')
+          bash scripts/build-windows-installer.sh --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Each of these tests skips itself when it has no artifact, so a missing
+          # installer must fail here rather than produce a green step that verified
+          # nothing. Exactly one setup is expected; the checksum step asserts the
+          # same thing later for a different reason.
+          $setups = @(Get-ChildItem dist/windows/*-setup.exe)
+          if ($setups.Count -ne 1) {
+            throw "Expected exactly one Windows setup executable, found $($setups.Count)"
+          }
+          $env:RADANOR_SETUP_EXE = $setups[0].FullName
+          # The signer refuses setup until its embedded uninstaller matches the
+          # hook's verified bytes AND independently passes trust verification.
+          ./validation/windows/Sign-SparrowWindowsArtifact.ps1 -Path $env:RADANOR_SETUP_EXE -Kind Setup
+          $env:RADANOR_PORTABLE_EXE = (Resolve-Path dist/windows/RadanorSparrow.exe).Path
+          $testLog = Join-Path $env:RUNNER_TEMP 'p9-installer-tests.jsonl'
+          go test ./internal/wininstaller -count=1 -json | Tee-Object -FilePath $testLog
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Require actual PASS events: an opt-in that silently skips is not evidence
+          # that the release candidate was checked.
+          $events = Get-Content $testLog | ConvertFrom-Json
+          foreach ($required in @('TestPortableExecutableCarriesTheBuildVersion', 'TestPackagedInstallerPayload', 'TestInstallerWindowsResources')) {
+            if (-not ($events | Where-Object { $_.Test -eq $required -and $_.Action -eq 'pass' })) {
+              throw "Required installer test did not execute successfully: $required"
+            }
+          }
+      # Re-extract and verify after final signing, before checksums or upload.
+      - name: Verify final Windows Authenticode signatures and checksums
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RADANOR_AUTHENTICODE_THUMBPRINT: ${{ vars.RADANOR_AUTHENTICODE_THUMBPRINT }}
+        run: |
+          $setup = (Get-ChildItem dist/windows/*-setup.exe | Select-Object -First 1).FullName
+          ./validation/windows/Assert-SparrowAuthenticode.ps1 `
+            -Path @('dist/windows/RadanorSparrow.exe', $setup) `
+            -ExpectedSignerThumbprint $env:RADANOR_AUTHENTICODE_THUMBPRINT
+          ./validation/windows/Assert-SparrowInstallerSigning.ps1 `
+            -Setup $setup -PortableDirectory dist/windows `
+            -SignedUninstaller $env:RADANOR_SIGNED_UNINSTALLER `
+            -SevenZip (Join-Path '${{ steps.release-msys.outputs.msys2-location }}' 'ucrt64/bin/7z.exe')
+          bash scripts/write-windows-release-checksums.sh dist/windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install the Linux window's build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev squashfs-tools curl
+      - name: Provision pinned AppImage build tool and runtime
+        if: runner.os == 'Linux'
+        run: bash validation/linux/Initialize-SparrowAppImageTool.sh --directory "$RUNNER_TEMP/appimage-toolchain" --github-env "$GITHUB_ENV"
+      - name: Build Linux release (native-window AppImage)
+        if: runner.os == 'Linux'
+        run: bash scripts/build-linux.sh --release --appimage
+      - name: Verify the native-window artifact
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          # One artifact from a clean runner; -print -quit avoids a pipeline whose
+          # early reader could turn pipefail into a false failure.
+          app=$(find dist/linux -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          test -n "$app" && test -s "$app"
+          # The window component is what separates this artifact from the portable
+          # executable, so its presence in the image is asserted, not assumed.
+          test -s dist/linux/radanor-sparrow-window
+          offset=$("$app" --appimage-offset)
+          listing=$(unsquashfs -o "$offset" -ll "$app")
+          case "$listing" in
+            *usr/bin/radanor-sparrow-window*) ;;
+            *) echo 'the AppImage does not contain the native window component' >&2; exit 1 ;;
+          esac
+          info=$(unsquashfs -o "$offset" -cat "$app" usr/share/radanor-sparrow/BUILD-INFO)
+          grep -qx 'variant=release' <<<"$info"
+      - name: Write release checksums
+        if: runner.os == 'Linux'
+        run: bash scripts/write-release-checksums.sh dist/linux
+      - name: Verify the checksums of the published artifacts
+        if: runner.os == 'Linux'
+        run: bash scripts/verify-release.sh dist/linux
+      # Signing is mandatory for an authorized release. The protected environment
+      # must provide an enabled switch, a key and the independently published
+      # fingerprint; otherwise this job fails before any upload. A signature covers
+      # all four published Linux files, never only the AppImage.
+      # See docs/deployment/RELEASE_SIGNING.md.
+      - name: Sign every published Linux artifact
+        if: runner.os == 'Linux'
+        env:
+          RADANOR_RELEASE_SIGNING: ${{ vars.RADANOR_RELEASE_SIGNING }}
+          RADANOR_SIGNING_KEY_ARMORED: ${{ secrets.RADANOR_SIGNING_KEY_ARMORED }}
+          RADANOR_RELEASE_FINGERPRINT: ${{ vars.RADANOR_RELEASE_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          if [ "$RADANOR_RELEASE_SIGNING" != enabled ]; then
+            echo 'Linux production signing is not enabled; refusing an unsigned release.' >&2
+            exit 1
+          fi
+          if [ -z "${RADANOR_SIGNING_KEY_ARMORED:-}" ]; then
+            echo 'RADANOR_RELEASE_SIGNING is enabled but the signing key secret is not configured.' >&2
+            echo 'Publish nothing: an unsigned artifact must not be labelled as a signed release.' >&2
+            exit 1
+          fi
+          if [ -z "${RADANOR_RELEASE_FINGERPRINT:-}" ]; then
+            echo 'RADANOR_RELEASE_SIGNING is enabled but no trusted fingerprint is recorded.' >&2
+            echo 'A signature whose fingerprint nobody published cannot be checked, so it is not a usable signature.' >&2
+            exit 1
+          fi
+          app=$(find dist/linux -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          test -n "$app" && test -s "$app"
+          test -s dist/linux/radanor-sparrow
+          test -s dist/linux/SHA256SUMS.appimage
+          test -s dist/linux/SHA256SUMS.portable
+          keyfile="$RUNNER_TEMP/radanor-release-signing-key.asc"
+          trap 'rm -f -- "$keyfile"' EXIT
+          ( umask 077; printf '%s\n' "$RADANOR_SIGNING_KEY_ARMORED" > "$keyfile" )
+          bash scripts/sign-release.sh --armored-key "$keyfile" \
+            --expect-fingerprint "$RADANOR_RELEASE_FINGERPRINT" \
+            "$app" dist/linux/radanor-sparrow \
+            dist/linux/SHA256SUMS.appimage dist/linux/SHA256SUMS.portable
+      - name: Verify every signature against the published fingerprint
+        if: runner.os == 'Linux'
+        env:
+          RADANOR_RELEASE_FINGERPRINT: ${{ vars.RADANOR_RELEASE_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          # The public key next to the artifact is not trusted by itself: the
+          # expected fingerprint is pinned, and a valid signature by any other key
+          # fails even when that key's file shipped in the same directory.
+          pub=$(find dist/linux -maxdepth 1 -name '*.asc.pub' -print -quit)
+          test -n "$pub"
+          bash scripts/verify-release.sh --require-signature --require-all-signed \
+            --expect-fingerprint "${RADANOR_RELEASE_FINGERPRINT:?}" \
+            --key "$pub" dist/linux
+      - name: Verify packaged licensing documents
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=dist/linux
+          if [ "${{ runner.os }}" = "Windows" ]; then dir=dist/windows; fi
+          test -s "$dir/LICENSE"
+          test -s "$dir/THIRD_PARTY_NOTICES.md"
+      - name: Upload Linux AppImage (native window)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-linux-appimage-amd64
+          path: |
+            dist/linux/RadanorSparrow-*-x86_64.AppImage
+            dist/linux/SHA256SUMS.appimage
+            dist/linux/LICENSE
+            dist/linux/THIRD_PARTY_NOTICES.md
+      - name: Upload Linux portable executable (browser fallback)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-linux-portable-amd64
+          path: |
+            dist/linux/radanor-sparrow
+            dist/linux/SHA256SUMS.portable
+            dist/linux/LICENSE
+            dist/linux/THIRD_PARTY_NOTICES.md
+      - name: Upload verified Linux signatures
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-linux-appimage-signature
+          path: |
+            dist/linux/*.asc
+            dist/linux/*.asc.pub
+      - name: Upload Windows release
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-windows-amd64
+          path: |
+            dist/windows/RadanorSparrow.exe
+            dist/windows/RadanorSparrow-*-setup.exe
+            dist/windows/SHA256SUMS.windows
+            dist/windows/BUILD-INFO
+            dist/windows/LICENSE
+            dist/windows/THIRD_PARTY_NOTICES.md

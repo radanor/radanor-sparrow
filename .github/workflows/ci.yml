@@ -1,0 +1,336 @@
+name: CE-1 CI
+
+# Development validation only. This workflow must stay green for ordinary work,
+# so it never runs the licensing release gate as a pass/fail check. A green run
+# here does NOT approve a public release: public release artifacts are produced
+# by the separate Release workflow, which invokes the licensing gate and fails
+# closed (see .github/workflows/release.yml and scripts/validate-release-licensing.sh).
+
+on:
+  push:
+  pull_request:
+  # Manual runs exist only for the reproducibility job below; it builds the whole
+  # path twice and is too expensive to run on every push.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+  go:
+    strategy:
+      # Each platform's result is reported on its own. With the default
+      # fail-fast, a Windows failure cancels the Ubuntu leg mid-run, turning a
+      # test result on one OS into an apparent "cancelled" job on the other and
+      # hiding whether the Ubuntu suite passed. No concurrency group is set on
+      # this workflow, so push and pull_request runs never cancel each other;
+      # the cancellation seen on Ubuntu came from this matrix.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - run: go test ./...
+      - run: go vet ./...
+      - run: go build ./cmd/...
+
+  race:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      # The signing and verification tests are part of this run; gpg is what they use,
+      # and on a Linux host its absence is a failure rather than a silent skip.
+      - run: sudo apt-get install -y --no-install-recommends gnupg
+      - run: go test -race ./...
+
+  licensing-report:
+    # Development validation. It allows the documented licensing placeholders but
+    # still fails on structural problems (altered BSL text, missing sections, a
+    # missing Additional Use Grant or GPLv3 Change License, invalid metadata).
+    # It is NOT a release approval: strict release mode runs only in the Release
+    # workflow and the --release build path.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - name: Development licensing validation
+        run: go run ./cmd/radanor-release-check --mode development
+
+  # The Linux window's dependencies and the distribution policy that decides
+  # whether its renderer sandbox can start. This is the cheap half of the
+  # compatibility matrix in the private engineering record: it proves that
+  # a stock release can install GTK3/WebKitGTK 4.1 and bubblewrap, and records the
+  # user-namespace policy of a real Ubuntu VM. It deliberately claims nothing
+  # about a native window: there is no desktop session here, and the AppImage run
+  # on a real release image needs the KVM validation described in that document.
+  linux-compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Report the release and its user-namespace policy
+        run: |
+          . /etc/os-release
+          echo "release=$PRETTY_NAME"
+          echo "kernel=$(uname -r)"
+          printf 'apparmor_enabled=%s\n' "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null || echo unknown)"
+          printf 'apparmor_restrict_unprivileged_userns=%s\n' \
+            "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo absent)"
+      - name: The window's system dependencies are installable here
+        run: |
+          sudo apt-get update -qq
+          check() {
+            for pkg in "$@"; do
+              if apt-cache show "$pkg" >/dev/null 2>&1; then
+                echo "available: $pkg"
+                return 0
+              fi
+            done
+            echo "missing on this release: $*" >&2
+            return 1
+          }
+          check libgtk-3-0t64 libgtk-3-0
+          check libwebkit2gtk-4.1-0
+          check bubblewrap
+          check libfuse3-4 libfuse3-3
+      - name: Measure whether the WebKit sandbox can start on this release
+        run: |
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          if /usr/bin/bwrap --ro-bind / / --proc /proc -- /bin/true; then
+            echo 'bubblewrap can create a user namespace here: the native window can use the WebKit sandbox'
+          else
+            echo 'bubblewrap cannot create a user namespace here: the application will present the authenticated browser'
+            echo 'a native-window result is therefore not evidence for this release'
+          fi
+          ls /etc/apparmor.d/ 2>/dev/null | grep -i bwrap || echo 'no distribution bwrap profile is installed'
+
+  # Development validation of the artifact a Linux release would publish: the
+  # AppImage with its GTK/WebKitGTK window component. The packaging job below
+  # builds the portable executable only, so without this job nothing in CI would
+  # notice if the native desktop artifact stopped building or stopped carrying its
+  # helper. This is a development artifact (variant=development): it does not run
+  # the licensing gate and is not a release.
+  linux-appimage:
+    name: Linux AppImage (native window)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the window's build and runtime dependencies
+        run: |
+          sudo apt-get update -qq
+          # gnupg is what the signature-verification and upgrade tests use: the
+          # installer refuses a signature it cannot check, so the suite needs gpg to
+          # exercise the path a user takes rather than skipping it.
+          sudo apt-get install -y --no-install-recommends \
+            gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libgtk-3-0 libwebkit2gtk-4.1-0 bubblewrap gnupg \
+            squashfs-tools xvfb openbox wmctrl xdg-utils curl python3 sqlite3 appstream
+      - name: Provision pinned AppImage build tool and runtime
+        run: bash validation/linux/Initialize-SparrowAppImageTool.sh --directory "$RUNNER_TEMP/appimage-toolchain" --github-env "$GITHUB_ENV"
+      - name: Build the AppImage with the native window component
+        run: bash scripts/build-linux.sh --appimage
+      - name: The packaged image carries the native helper
+        run: |
+          set -euo pipefail
+          # -print -quit avoids a pipeline whose early reader could turn pipefail
+          # into a false failure.
+          app=$(find dist/linux -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          test -n "$app"
+          test -s dist/linux/radanor-sparrow-window
+          offset=$("$app" --appimage-offset)
+          listing=$(unsquashfs -o "$offset" -ll "$app")
+          case "$listing" in
+            *usr/bin/radanor-sparrow-window*) ;;
+            *) echo 'the AppImage does not contain the native window component' >&2; exit 1 ;;
+          esac
+          info=$(unsquashfs -o "$offset" -cat "$app" usr/share/radanor-sparrow/BUILD-INFO)
+          grep -qx 'variant=development' <<<"$info"
+      - name: Validate the packaged artifact
+        run: |
+          set -euo pipefail
+          app=$(find "$PWD/dist/linux" -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          test -n "$app"
+          RADANOR_APPIMAGE="$app" go test ./internal/appimage -count=1 -v
+      - name: Validate the AppStream metadata
+        run: |
+          set -euo pipefail
+          # The packaged copy, not a source file: the image is what a catalogue reads.
+          app=$(find dist/linux -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          offset=$("$app" --appimage-offset)
+          unsquashfs -o "$offset" -cat "$app" usr/share/metainfo/radanor-sparrow.metainfo.xml \
+            > "$RUNNER_TEMP/radanor-sparrow.metainfo.xml"
+          report=$(appstreamcli validate --no-net --explain "$RUNNER_TEMP/radanor-sparrow.metainfo.xml" 2>&1 || true)
+          printf '%s\n' "$report"
+          if grep -q '^E:' <<<"$report"; then
+            echo 'the AppStream metadata has error-level findings' >&2
+            exit 1
+          fi
+          # One accepted warning (the component id is not reverse-DNS, because the
+          # desktop file, icon, window class and launcher argument share that name).
+          warnings=$(grep -c '^W:' <<<"$report" || true)
+          if [ "$warnings" -gt 1 ]; then
+            echo "$warnings AppStream warnings: only the known component-id warning is accepted" >&2
+            exit 1
+          fi
+      - name: Native window smoke (X11 under Xvfb; not a Wayland session)
+        run: |
+          set -euo pipefail
+          app=$(find dist/linux -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          test -n "$app"
+          Xvfb :99 -screen 0 1600x1000x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          sleep 2
+          DISPLAY=:99 openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+          sleep 1
+          DISPLAY=:99 bash validation/linux/appimage-smoke.sh --require-native-window "$app"
+
+  # The reproducibility check builds the whole path twice, each in its own clean
+  # clone, so it is too expensive for every push. It runs on demand only; a hash
+  # mismatch fails the job.
+  linux-appimage-repro:
+    name: Linux AppImage reproducibility
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the window's build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
+            squashfs-tools curl git
+      - name: Provision pinned AppImage build tool and runtime
+        run: bash validation/linux/Initialize-SparrowAppImageTool.sh --directory "$RUNNER_TEMP/appimage-toolchain" --github-env "$GITHUB_ENV"
+      - name: Build the same commit twice and compare
+        run: bash validation/linux/appimage-repro.sh --ref HEAD
+
+  desktop-packaging:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # Installer ancestry requires full history; keep Linux checkout unchanged.
+          fetch-depth: ${{ runner.os == 'Windows' && '0' || '1' }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build Windows desktop artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+      - name: Set up signed Windows installer build tools
+        if: runner.os == 'Windows'
+        id: p8-msys
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-7zip
+      - name: Build and inspect Windows development installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tools = Join-Path '${{ steps.p8-msys.outputs.msys2-location }}' 'ucrt64/bin'
+          $env:MAKENSIS = Join-Path $tools 'makensis.exe'
+          $env:RADANOR_7ZIP = Join-Path $tools '7z.exe'
+          $env:Path = "$tools;C:\Program Files\Git\bin;" + $env:Path
+          # Exact archive + SHA256 + required MSYS2 signature, not cached repo latest.
+          ./validation/windows/Initialize-SparrowNsis.ps1 -MsysRoot '${{ steps.p8-msys.outputs.msys2-location }}' -CacheDirectory (Join-Path $env:RUNNER_TEMP 'p8-nsis')
+          bash scripts/build-windows-installer.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:RADANOR_SETUP_EXE = (Get-ChildItem dist/windows/*-setup.exe | Select-Object -First 1).FullName
+          $env:RADANOR_PORTABLE_EXE = (Resolve-Path dist/windows/RadanorSparrow.exe).Path
+          $env:RADANOR_INSTALLER_PORTABLE_B = (Resolve-Path dist/windows).Path
+          $env:RADANOR_HEADLESS_INSTALLER = '1'
+          $env:RADANOR_UNSIGNED_INSTALLER_TEST = '1'
+          # SDK already installed on the runner; no signing-tool download and no
+          # production credentials. The helper removes its own untrusted test key.
+          $sdk = @(Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/*/x64/signtool.exe' | Sort-Object FullName -Descending)
+          if ($sdk.Count -eq 0) { throw 'Windows SDK SignTool required for disposable signing acceptance' }
+          $env:RADANOR_TEST_SIGNTOOL = $sdk[0].FullName
+          $env:RADANOR_SPARROW_TEST_BINARY = $env:RADANOR_PORTABLE_EXE
+          # Require actual PASS events so missing opt-ins cannot silently skip checks.
+          $testLog = Join-Path $env:RUNNER_TEMP 'p8-installer-tests.jsonl'
+          go test ./internal/wininstaller -count=1 -json | Tee-Object -FilePath $testLog
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $events = Get-Content $testLog | ConvertFrom-Json
+          foreach ($required in @('TestPortableExecutableCarriesTheBuildVersion', 'TestPackagedInstallerPayload', 'TestInstallerWindowsResources', 'TestHeadlessInstallerLifecycle', 'TestInstallerSigningModeGuards', 'TestNativeCompilerPackagingModes', 'TestUnsignedInstallerPayloadVerification/powershell.exe', 'TestUnsignedInstallerPayloadVerification/pwsh.exe', 'TestWindowsAuthenticodeDisposableAcceptance/powershell.exe', 'TestWindowsAuthenticodeDisposableAcceptance/pwsh.exe')) {
+            if (-not ($events | Where-Object { $_.Test -eq $required -and $_.Action -eq 'pass' })) {
+              throw "Required installer test did not execute successfully: $required"
+            }
+          }
+      - name: Build Linux desktop artifact
+        if: runner.os == 'Linux'
+        run: bash scripts/build-linux.sh
+      - name: Validate Windows packaged lifecycle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:RADANOR_SPARROW_TEST_BINARY = Join-Path $PWD 'dist/windows/RadanorSparrow.exe'
+          go test ./internal/gateway -run '^TestDistributionEmbedsEveryApplicationAsset$' -count=1 -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./internal/branding -run '^TestReleaseArtifactsIncludeLicenseAndNotices$' -count=1 -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./internal/desktop -count=1 -v
+      - name: Validate Linux packaged lifecycle
+        if: runner.os == 'Linux'
+        run: |
+          export RADANOR_SPARROW_TEST_BINARY="$PWD/dist/linux/radanor-sparrow"
+          go test ./internal/gateway -run '^TestDistributionEmbedsEveryApplicationAsset$' -count=1 -v
+          go test ./internal/branding -run '^TestReleaseArtifactsIncludeLicenseAndNotices$' -count=1 -v
+          go test ./internal/desktop -count=1 -v

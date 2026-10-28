@@ -1,0 +1,358 @@
+name: Community Edition unsigned distribution
+
+# This is NOT the Release workflow, and the two must never be confused.
+#
+# `.github/workflows/release.yml` publishes signed artifacts and is unchanged. This
+# workflow publishes Community Edition artifacts that are deliberately, disclosedly
+# unsigned, because no Windows code-signing certificate and no OpenPGP release key
+# exist yet. It can do that only because the trust claim is removed rather than
+# faked: it produces no Authenticode signature, no OpenPGP signature and no trusted
+# timestamp, and it ships docs/deployment/UNSIGNED_DISTRIBUTION_NOTICE.md beside
+# every artifact so a downloader is told exactly what a checksum does and does not
+# prove.
+#
+# The gates are the same ones the signed release runs, in the same order:
+#
+#   licensing-gate          the strict BSL check. Identical to the Release
+#                           workflow's: it fails closed, and while any third-party
+#                           conclusion is open this first job stops everything.
+#   unsigned-authorization  the recorded policy approval, an exact vX.Y.Z tag, a tag
+#                           that names a commit on main, one version shared by the
+#                           tag and the build, and a refusal to run at all when
+#                           production signing is enabled. Administrators configure
+#                           the community-release environment; the workflow can only
+#                           require it.
+#
+# It is dispatch-only, never triggered by a push or a tag, so ordinary development
+# CI cannot reach it and no run happens because someone pushed. It has
+# `contents: read` and creates no GitHub Release: publication stays a separate,
+# reviewed act. The policy this implements is
+# docs/deployment/COMMUNITY_UNSIGNED_DISTRIBUTION_POLICY.md, which is a proposal
+# until the rights holder signs its approval record.
+#
+# Pins and provenance for every action below are recorded in
+# docs/deployment/RELEASE_SUPPLY_CHAIN.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version being distributed (must match branding.Version and the tag)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  licensing-gate:
+    name: Licensing release gate (fails closed)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - name: Validate release licensing metadata
+        run: go run ./cmd/radanor-release-check
+
+  unsigned-authorization:
+    name: Verify recorded authorization for an unsigned distribution
+    needs: licensing-gate
+    runs-on: ubuntu-24.04
+    # radanor-admin must create this environment, restrict it to protected v* tags
+    # and require approval, and only then set RADANOR_COMMUNITY_UNSIGNED_RELEASE.
+    # Until that variable reads `approved` this job stops, which is the same
+    # behaviour as leaving the environment unconfigured.
+    environment: community-release
+    env:
+      UNSIGNED_APPROVAL: ${{ vars.RADANOR_COMMUNITY_UNSIGNED_RELEASE }}
+      REQUESTED_VERSION: ${{ inputs.version }}
+      WINDOWS_SIGNING: ${{ vars.RADANOR_WINDOWS_SIGNING }}
+      LINUX_SIGNING: ${{ vars.RADANOR_RELEASE_SIGNING }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - name: Require the recorded approval, an exact tag and no signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$UNSIGNED_APPROVAL" != approved ]]; then
+            echo 'Unsigned Community Edition distribution is not approved for this environment; refusing to build artifacts.' >&2
+            echo 'See docs/deployment/COMMUNITY_UNSIGNED_DISTRIBUTION_POLICY.md and have the rights holder sign its approval record.' >&2
+            exit 1
+          fi
+          # This process exists to publish artifacts that are openly unsigned. If
+          # signing is configured then a signed artifact is both possible and
+          # required, and producing a weaker one here would only create a second,
+          # quietly worse download. The Release workflow is the right path then.
+          if [[ "$WINDOWS_SIGNING" == enabled || "$LINUX_SIGNING" == enabled ]]; then
+            echo 'Refusing an unsigned distribution while production signing is enabled; run .github/workflows/release.yml instead.' >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" != tag || ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "An unsigned distribution must run from an exact vX.Y.Z tag, not $GITHUB_REF_TYPE $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          version=${GITHUB_REF_NAME#v}
+          if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$version" ]]; then
+            echo "Requested version $REQUESTED_VERSION does not match tag version $version." >&2
+            exit 1
+          fi
+      - name: Require the tag to name a reviewed commit on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An environment approval approves a run, not a commit, so the tagged
+          # commit is proved to sit on the protected main line here. That it was
+          # reviewed remains an administrative control (see the policy document).
+          git fetch --quiet --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo 'Refusing distribution: the tag does not point at a commit on main.' >&2
+            exit 1
+          fi
+          built=$(go run ./cmd/radanor-version -release) || {
+            echo 'Refusing distribution: this checkout does not satisfy the release version rule.' >&2
+            exit 1
+          }
+          if [[ "$built" != "${GITHUB_REF_NAME#v}" ]]; then
+            echo "Refusing distribution: the tag names ${GITHUB_REF_NAME#v}, but this checkout builds as $built." >&2
+            exit 1
+          fi
+          echo "Authorized unsigned Community Edition candidate: $GITHUB_REF_NAME"
+
+  # The disclosure ships beside the artifacts it describes. It is generated from the
+  # versioned notice rather than retyped, so the text a downloader reads is the text
+  # this repository reviews.
+  ship-unsigned-disclosure:
+    name: Stage the unsigned-distribution disclosure
+    needs: unsigned-authorization
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Write the disclosure for both platforms
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/linux dist/windows
+          for dir in dist/linux dist/windows; do
+            cp docs/deployment/UNSIGNED_DISTRIBUTION_NOTICE.md "$dir/UNSIGNED-DISTRIBUTION.md"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-community-unsigned-disclosure
+          path: |
+            dist/linux/UNSIGNED-DISTRIBUTION.md
+            dist/windows/UNSIGNED-DISTRIBUTION.md
+
+  unsigned-linux-artifacts:
+    name: Build unsigned Linux artifacts
+    needs: unsigned-authorization
+    runs-on: ubuntu-24.04
+    environment: community-release
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the Linux window's build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev squashfs-tools curl
+      - name: Provision pinned AppImage build tool and runtime
+        run: bash validation/linux/Initialize-SparrowAppImageTool.sh --directory "$RUNNER_TEMP/appimage-toolchain" --github-env "$GITHUB_ENV"
+      - name: Build the Linux release (native-window AppImage)
+        run: bash scripts/build-linux.sh --release --appimage
+      - name: Verify the artifact is a release build carrying the native window
+        run: |
+          set -euo pipefail
+          app=$(find dist/linux -maxdepth 1 -name 'RadanorSparrow-*-x86_64.AppImage' -print -quit)
+          test -n "$app" && test -s "$app"
+          test -s dist/linux/radanor-sparrow-window
+          offset=$("$app" --appimage-offset)
+          case "$(unsquashfs -o "$offset" -ll "$app")" in
+            *usr/bin/radanor-sparrow-window*) ;;
+            *) echo 'the AppImage does not contain the native window component' >&2; exit 1 ;;
+          esac
+          info=$(unsquashfs -o "$offset" -cat "$app" usr/share/radanor-sparrow/BUILD-INFO)
+          grep -qx 'variant=release' <<<"$info"
+      - name: Require that nothing here carries a signature
+        run: |
+          set -euo pipefail
+          # A positive assertion of absence. This process must not produce, and no
+          # later step may attach, an OpenPGP signature: an unsigned artifact that
+          # gains a signature halfway through would be reported as signed by whoever
+          # reads the download, and the trust claim would come back without the key
+          # custody behind it.
+          if compgen -G 'dist/linux/*.asc' > /dev/null || compgen -G 'dist/linux/*.asc.pub' > /dev/null; then
+            echo 'Refusing to publish: a signature file is present in an unsigned distribution.' >&2
+            exit 1
+          fi
+      - name: Write and verify the checksum manifests
+        run: |
+          set -euo pipefail
+          bash scripts/write-release-checksums.sh dist/linux
+          bash scripts/verify-release.sh dist/linux
+      - name: Attach the unsigned-distribution disclosure
+        run: cp docs/deployment/UNSIGNED_DISTRIBUTION_NOTICE.md dist/linux/UNSIGNED-DISTRIBUTION.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-community-unsigned-linux-amd64
+          path: |
+            dist/linux/RadanorSparrow-*-x86_64.AppImage
+            dist/linux/SHA256SUMS.appimage
+            dist/linux/radanor-sparrow
+            dist/linux/SHA256SUMS.portable
+            dist/linux/BUILD-INFO
+            dist/linux/LICENSE
+            dist/linux/THIRD_PARTY_NOTICES.md
+            dist/linux/UNSIGNED-DISTRIBUTION.md
+
+  # Windows is a separate authorization, not a detail of the Linux one: a build with
+  # no publisher signature is a materially worse experience on Windows than on Linux
+  # (Unknown Publisher, SmartScreen), so it needs the owner's explicit consent. An
+  # unapproved Windows distribution shows as a skipped job here, which is the honest
+  # rendering of "not authorized" rather than a green step that built nothing.
+  unsigned-windows-artifacts:
+    name: Build unsigned Windows artifacts
+    needs: [unsigned-authorization, ship-unsigned-disclosure]
+    if: vars.RADANOR_UNSIGNED_WINDOWS_DISTRIBUTION == 'approved'
+    runs-on: windows-2025
+    environment: community-release
+    env:
+      RADANOR_COMMUNITY_UNSIGNED_RELEASE: ${{ vars.RADANOR_COMMUNITY_UNSIGNED_RELEASE }}
+      RADANOR_UNSIGNED_WINDOWS_DISTRIBUTION: ${{ vars.RADANOR_UNSIGNED_WINDOWS_DISTRIBUTION }}
+      RADANOR_WINDOWS_SIGNING: ${{ vars.RADANOR_WINDOWS_SIGNING }}
+      RADANOR_RELEASE_SIGNING: ${{ vars.RADANOR_RELEASE_SIGNING }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.27.x'
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the unsigned portable executable
+        shell: pwsh
+        run: |
+          if ($env:RADANOR_COMMUNITY_UNSIGNED_RELEASE -cne 'approved' -or
+              $env:RADANOR_UNSIGNED_WINDOWS_DISTRIBUTION -cne 'approved') {
+            throw 'Separate Community owner and unsigned-Windows approvals are required'
+          }
+          if ($env:RADANOR_WINDOWS_SIGNING -ceq 'enabled' -or $env:RADANOR_RELEASE_SIGNING -ceq 'enabled') {
+            throw 'Unsigned packaging is forbidden while production signing is enabled'
+          }
+          ./scripts/build-windows.ps1 -Release
+      - name: Set up verified Windows installer build tools
+        id: community-msys
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-7zip
+      - name: Build the unsigned NSIS installer
+        shell: pwsh
+        run: |
+          $tools = Join-Path '${{ steps.community-msys.outputs.msys2-location }}' 'ucrt64/bin'
+          $env:MAKENSIS = Join-Path $tools 'makensis.exe'
+          $env:RADANOR_7ZIP = Join-Path $tools '7z.exe'
+          $env:Path = "$tools;C:\Program Files\Git\bin;" + $env:Path
+          ./validation/windows/Initialize-SparrowNsis.ps1 `
+            -MsysRoot '${{ steps.community-msys.outputs.msys2-location }}' `
+            -CacheDirectory (Join-Path $env:RUNNER_TEMP 'p9-nsis')
+          # The recorded acknowledgement that an unsigned Windows artifact was
+          # authorized. The script refuses without it, and refuses again if signing
+          # is enabled.
+          $env:RADANOR_COMMUNITY_UNSIGNED = 'acknowledged'
+          $env:RADANOR_UNSIGNED_POWERSHELL = (Get-Process -Id $PID).Path
+          bash scripts/build-windows-installer.sh --community-unsigned
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setups = @(Get-ChildItem dist/windows/*-setup.exe)
+          if ($setups.Count -ne 1) {
+            throw "Expected exactly one Windows setup executable, found $($setups.Count)"
+          }
+      - name: Require that both Windows artifacts are genuinely unsigned
+        shell: pwsh
+        run: |
+          # Asserted, not assumed: if a certificate store or an HSM were reachable
+          # and something signed these files, publishing them under an unsigned
+          # distribution would understate what happened, and a signature nobody
+          # published a fingerprint for is worse than none. NotSigned is the
+          # expected state and anything else fails the run.
+          foreach ($path in @('dist/windows/RadanorSparrow.exe') + @(Get-ChildItem dist/windows/*-setup.exe | ForEach-Object { $_.FullName })) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $path
+            if ($signature.Status -ne 'NotSigned') {
+              throw "$path is not unsigned (Authenticode status $($signature.Status)); an unsigned distribution must not carry a signature"
+            }
+            Write-Host "$(Split-Path -Leaf $path): NotSigned (asserted)"
+          }
+          $tools = Join-Path '${{ steps.community-msys.outputs.msys2-location }}' 'ucrt64/bin'
+          $setups = @(Get-ChildItem dist/windows/*-setup.exe)
+          if ($setups.Count -ne 1) { throw 'Expected exactly one unsigned setup' }
+          ./validation/windows/Assert-SparrowUnsignedWindows.ps1 `
+            -Setup $setups[0].FullName -PortableDirectory dist/windows `
+            -SevenZip (Join-Path $tools '7z.exe')
+      - name: Write and verify the checksum manifest
+        shell: pwsh
+        run: |
+          bash scripts/write-windows-release-checksums.sh dist/windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Attach the unsigned-distribution disclosure
+        shell: pwsh
+        run: Copy-Item -Force docs/deployment/UNSIGNED_DISTRIBUTION_NOTICE.md dist/windows/UNSIGNED-DISTRIBUTION.md
+      - name: Verify packaged licensing documents and disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          for required in LICENSE THIRD_PARTY_NOTICES.md UNSIGNED-DISTRIBUTION.md SHA256SUMS.windows; do
+            test -s "dist/windows/$required"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: radanor-sparrow-community-unsigned-windows-amd64
+          path: |
+            dist/windows/RadanorSparrow.exe
+            dist/windows/RadanorSparrow-*-setup.exe
+            dist/windows/SHA256SUMS.windows
+            dist/windows/BUILD-INFO
+            dist/windows/LICENSE
+            dist/windows/THIRD_PARTY_NOTICES.md
+            dist/windows/UNSIGNED-DISTRIBUTION.md
+
+  # Publication is deliberately absent. Uploading a workflow artifact is not
+  # publication, and creating a GitHub Release is: it needs a human who has read
+  # UNSIGNED-DISTRIBUTION.md and the checksums, which the policy document describes
+  # as a separate reviewed act run by the maintainer, not by this workflow.
+  summary:
+    name: Report what was produced and what it does not prove
+    needs: [unsigned-linux-artifacts, unsigned-windows-artifacts]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: State the unsigned status of this run
+        shell: bash
+        run: |
+          cat <<'MSG'
+          Community Edition unsigned distribution finished.
+
+          Every artifact this run produced is UNSIGNED: no Authenticode signature, no
+          OpenPGP signature, no trusted timestamp. Nothing was published to a GitHub
+          Release. A SHA-256 checksum proves the bytes match the manifest; it does not
+          prove who built them. UNSIGNED-DISTRIBUTION.md ships beside the artifacts
+          and says so in the reader's own words.
+
+          Publication remains a separate, reviewed act.
+          MSG

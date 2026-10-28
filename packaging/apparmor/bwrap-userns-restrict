@@ -1,0 +1,84 @@
+# Reference AppArmor profile: allow bubblewrap to create the user namespace the
+# WebKitGTK renderer sandbox needs, on a host that restricts unprivileged user
+# namespaces.
+#
+# THIS FILE IS NOT INSTALLED BY ANY RADANOR SCRIPT. It exists so an administrator
+# can review it, decide whether their host policy should allow it, and install it
+# deliberately. Radanor Sparrow never writes to /etc/apparmor.d, never calls
+# apparmor_parser, and never turns the kernel restriction off.
+#
+# When it is needed
+#   Ubuntu 24.04 sets kernel.apparmor_restrict_unprivileged_userns=1 and does not
+#   ship a profile for /usr/bin/bwrap. WebKitGTK starts its own bubblewrap, which
+#   is then allowed to create the namespace but denied the write to that
+#   namespace's uid map, so the renderer sandbox cannot start and the application
+#   presents the authenticated dashboard in the browser instead (by design - it
+#   never shows an unsandboxed window).
+#   Ubuntu 26.04 already ships its own /etc/apparmor.d/bwrap-userns-restrict and
+#   does not need this file. Ubuntu 22.04 does not restrict user namespaces.
+#
+# Why it is attached to /usr/bin/bwrap
+#   The Radanor window component does not create the user namespace itself; it
+#   asks WebKitGTK to, and WebKitGTK execs /usr/bin/bwrap. A profile on the
+#   Radanor binaries would not cover that exec, and a profile on the AppImage's
+#   mount path could not match a path that changes on every launch. Scope is kept
+#   to bubblewrap, and the children it starts are stacked under unpriv_bwrap,
+#   whose capabilities are dropped - the same structure Ubuntu 26.04 ships.
+#
+# How to review and install (administrator, after reading the above)
+#   install -m 644 packaging/apparmor/bwrap-userns-restrict \
+#     /etc/apparmor.d/bwrap-userns-restrict
+#   apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+#   /usr/bin/bwrap --ro-bind / / --proc /proc -- /bin/true   # must exit 0
+#   Then relaunch Radanor Sparrow; the native window should appear.
+#   To remove it: rm /etc/apparmor.d/bwrap-userns-restrict and
+#   apparmor_parser -R /etc/apparmor.d/bwrap-userns-restrict
+#
+# abi/4.0 is deliberate: it is what Ubuntu 24.04's AppArmor supports, and newer
+# releases accept it. The io_uring rule 26.04's copy carries is omitted because
+# the bubblewrap on 24.04 does not use it and an older parser would reject it.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(attach_disconnected,mediate_deleted) {
+  allow capability,
+  allow file rwlkm /{,**},
+  allow network,
+  allow unix,
+  allow ptrace,
+  allow signal,
+  allow mqueue,
+  allow userns,
+  allow mount,
+  allow umount,
+  allow pivot_root,
+  allow dbus,
+
+  # Children of bubblewrap are stacked under unpriv_bwrap, which strips
+  # capabilities. This is what keeps the profile from being a general way around
+  # the namespace restriction.
+  allow pix /** -> &bwrap//&unpriv_bwrap,
+
+  include if exists <local/bwrap-userns-restrict>
+}
+
+profile unpriv_bwrap flags=(attach_disconnected,mediate_deleted) {
+  allow file rwlkm /{,**},
+  allow network,
+  allow unix,
+  allow ptrace,
+  allow signal,
+  allow mqueue,
+  allow userns,
+  allow mount,
+  allow umount,
+  allow pivot_root,
+  allow dbus,
+  allow pix /** -> &unpriv_bwrap,
+
+  audit deny capability,
+
+  include if exists <local/unpriv_bwrap>
+}
