@@ -17,7 +17,7 @@ Most questions have a written answer:
 | Where is my data, and how do I delete it? | [`SECURITY_AND_PRIVACY.md`](SECURITY_AND_PRIVACY.md) |
 | What am I allowed to do with it? | [`COMMUNITY_LICENSE_GUIDE.md`](COMMUNITY_LICENSE_GUIDE.md) |
 | Why does it say it cannot show a window? | The reason is written to `application.log`; the Linux guide has a [symptom table](../deployment/LINUX_INSTALL_GUIDE.md#troubleshooting) |
-| What is still missing from this version? | [Known limitations](RELEASE_NOTES_V0_1_0.md#known-limitations-in-v010) |
+| What is still missing from this version? | [Known limitations](RELEASE_NOTES_V0_1_1.md#known-limitations-in-v011) |
 
 ## Reporting an ordinary bug
 
@@ -97,7 +97,7 @@ exists**, and nothing here obliges the project to pay one.
 build from any branch is not supported and is not covered by this policy, however it is
 labelled.
 
-Once v0.1.0 is published, this is the policy, updated at each release:
+Once v0.1.1 is published, this is the policy, updated at each release:
 
 | Version | Supported |
 | --- | --- |

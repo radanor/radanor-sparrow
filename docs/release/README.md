@@ -1,10 +1,10 @@
 # Radanor Sparrow Community Edition — release documentation
 
 This directory holds the documentation written for **people who download and run
-Radanor Sparrow Community Edition v0.1.0**: installation, verification, licensing in plain
+Radanor Sparrow Community Edition v0.1.1**: installation, verification, licensing in plain
 language, privacy, support, and the release notes.
 
-**v0.1.0 has not been published.** Nothing here announces a release. The authoritative
+**v0.1.1 has not been published.** Nothing here announces a release. The authoritative
 gate is [`FINAL_RELEASE_CHECKLIST.md`](FINAL_RELEASE_CHECKLIST.md), and it currently
 reports publication as not authorized.
 
@@ -19,8 +19,8 @@ reports publication as not authorized.
 | [`COMMUNITY_LICENSE_GUIDE.md`](COMMUNITY_LICENSE_GUIDE.md) | know what you may do with Sparrow, in plain language | users and organisations |
 | [`THIRD_PARTY_LICENSE_COMPLIANCE.md`](THIRD_PARTY_LICENSE_COMPLIANCE.md) | see which third-party components ship, under which licences, with what obligations | redistributors, auditors |
 | [`SUPPORT_AND_SECURITY_REPORTING.md`](SUPPORT_AND_SECURITY_REPORTING.md) | report a bug or a vulnerability, and know which channels actually exist | everyone |
-| [`RELEASE_NOTES_V0_1_0.md`](RELEASE_NOTES_V0_1_0.md) | see what this version contains and what it deliberately does not | everyone |
-| [`GITHUB_RELEASE_V0_1_0.md`](GITHUB_RELEASE_V0_1_0.md) | publish the release, with every value that must be filled at that moment marked | release manager |
+| [`RELEASE_NOTES_V0_1_1.md`](RELEASE_NOTES_V0_1_1.md) | see what this version contains and what it deliberately does not | everyone |
+| [`GITHUB_RELEASE_V0_1_1.md`](GITHUB_RELEASE_V0_1_1.md) | publish the release, with every value that must be filled at that moment marked | release manager |
 | [`FINAL_RELEASE_CHECKLIST.md`](FINAL_RELEASE_CHECKLIST.md) | see exactly what still blocks publication, and who owns each item | release manager, rights holder |
 
 The Linux installation guide lives at

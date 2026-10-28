@@ -165,4 +165,4 @@ Windows artifacts so that this is not something you have to reconstruct.
   changeover and the third-party position in more detail.
 - [`THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md) — dependency licences,
   attributions and the full LGPL-2.1 and GCC Runtime Library Exception texts.
-- [`RELEASE_NOTES_V0_1_0.md`](RELEASE_NOTES_V0_1_0.md) — what this version contains.
+- [`RELEASE_NOTES_V0_1_1.md`](RELEASE_NOTES_V0_1_1.md) — what this version contains.

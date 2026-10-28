@@ -40,7 +40,7 @@ On Windows (PowerShell, run from the download folder):
 
 ```powershell
 Get-FileHash -Algorithm SHA256 .\RadanorSparrow.exe
-Get-FileHash -Algorithm SHA256 .\RadanorSparrow-0.1.0-setup.exe
+Get-FileHash -Algorithm SHA256 .\RadanorSparrow-0.1.1-setup.exe
 ```
 
 Compare each value with the line for that file in `SHA256SUMS.windows`.

@@ -1,11 +1,11 @@
 # Installing Radanor Sparrow on Windows
 
 This is the end-user guide for the Windows distribution of Radanor Sparrow Community
-Edition v0.1.0. It covers the portable executable, the NSIS installer, first launch,
+Edition v0.1.1. It covers the portable executable, the NSIS installer, first launch,
 verification, upgrades, uninstall and the warnings you should expect to see.
 
 **No release of Sparrow has been published yet.** This guide describes the installation
-that a published v0.1.0 release will perform. It is written from the measured behaviour
+that a published v0.1.1 release will perform. It is written from the measured behaviour
 of development builds and of the installer's own acceptance runs, and it is factually
 incomplete in one place on purpose: it cannot name the final file hashes, because no
 release artifact exists yet. Where a value is only known at release time, this guide
@@ -102,7 +102,7 @@ What setup does **not** do:
 For scripted or fleet use, setup accepts NSIS's standard silent switches:
 
 ```bat
-RadanorSparrow-0.1.0-setup.exe /S /D=C:\Tools\Radanor Sparrow
+RadanorSparrow-0.1.1-setup.exe /S /D=C:\Tools\Radanor Sparrow
 ```
 
 `/D=` must be **last** and **unquoted**, per NSIS syntax. Silent uninstall is the
@@ -193,7 +193,7 @@ Upgrades in either direction are constrained by the build's real identity:
   newer installation;
 - a *development* build cannot replace a *release* build.
 
-Earlier generations consume disk until uninstall; pruning is not implemented in v0.1.0.
+Earlier generations consume disk until uninstall; pruning is not implemented in v0.1.1.
 
 ## Uninstalling
 
