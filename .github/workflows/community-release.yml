@@ -342,11 +342,42 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
+      # The run's own verdict on platform completeness. A skipped Windows job is an
+      # honest "not authorized", but the run must not read as a cross-platform
+      # release when one platform produced nothing, and an approved Windows job that
+      # did not succeed is a contradiction rather than a permitted omission.
+      - name: Report which platforms produced artifacts
+        shell: bash
+        env:
+          LINUX_RESULT: ${{ needs.unsigned-linux-artifacts.result }}
+          WINDOWS_RESULT: ${{ needs.unsigned-windows-artifacts.result }}
+          WINDOWS_APPROVAL: ${{ vars.RADANOR_UNSIGNED_WINDOWS_DISTRIBUTION }}
+        run: |
+          set -euo pipefail
+          printf 'Linux artifacts:   %s\n' "$LINUX_RESULT"
+          printf 'Windows artifacts: %s\n' "$WINDOWS_RESULT"
+          if [[ "$LINUX_RESULT" != success ]]; then
+            echo "::error::The Linux artifact job finished '$LINUX_RESULT'; this run produced no usable Linux set."
+            exit 1
+          fi
+          if [[ "$WINDOWS_RESULT" == success ]]; then
+            echo 'Both platforms produced artifacts in this run.'
+            exit 0
+          fi
+          if [[ "$WINDOWS_APPROVAL" == approved ]]; then
+            echo "::error::Windows distribution is approved, but the Windows artifact job finished '$WINDOWS_RESULT'. This run is not a complete cross-platform release."
+            exit 1
+          fi
+          echo "::warning::Windows artifacts were NOT produced (job: $WINDOWS_RESULT); this run is a Linux-only distribution, not a cross-platform release."
+
       - name: State the unsigned status of this run
         shell: bash
         run: |
           cat <<'MSG'
           Community Edition unsigned distribution finished.
+
+          The platform results above are authoritative: if the Windows job did not
+          succeed, no Windows artifact exists for this run, whatever else it says.
 
           Every artifact this run produced is UNSIGNED: no Authenticode signature, no
           OpenPGP signature, no trusted timestamp. Nothing was published to a GitHub

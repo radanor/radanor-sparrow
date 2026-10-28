@@ -226,11 +226,16 @@ reads:
 
 ```
 Change Date:          2030-10-27
-                      First public distribution of this version: 2026-10-27
+                      Actual first public distribution of this version: none.
+                      First public distribution of this version: 2026-10-27 —
+                      the planned date, not a record of publication.
 ```
 
-The Change Date must be on the same line as the `Change Date:` label (it is the
-first `YYYY-MM-DD` date in the parameter), must not precede the first public
+Nothing in that parameter asserts that a distribution has occurred. The actual
+date is recorded when the first public release is published; until then the
+parameter says `none`, and the planned date is what the gate measures. The Change
+Date must be on the same line as the `Change Date:` label (it is the first
+`YYYY-MM-DD` date in the parameter), must not precede the actual first public
 distribution, and must not be later than four years after it.
 
 ## Files that carry this license
@@ -274,11 +279,13 @@ record, which is not published with the source:
    legal certification is claimed. Publication is blocked by the release controls and the
    untested release artifacts, not by licensing.
 2. **Change Date (set to 2030-10-27).** The parameter records the concrete date
-   2030-10-27 together with `First public distribution of this version: 2026-10-27`.
-   The 2026 date is the **intended** release date: no version has been published, and
-   the parameter says so rather than asserting that one has. 2030-10-27 is exactly
+   2030-10-27 together with two distinct distribution fields: `Actual first public
+   distribution of this version: none` and `First public distribution of this
+   version: 2026-10-27 — the planned date, not a record of publication`. The 2026
+   date is the **planned** release date: no version has been published, and the
+   parameter says so rather than asserting that one has. 2030-10-27 is exactly
    four years after it — the latest date the licence allows for that
-   first-distribution date.
+   distribution date.
 
    At publication the actual first public distribution date must be recorded, and the
    Change Date must be no earlier than it and no later than four years after it; if

@@ -122,10 +122,10 @@ same version becomes available to you under the GPLv3. From then on the GPLv3 â€
 this page â€” defines what you may do, including its copyleft obligations for
 distribution.
 
-`LICENSE` also records the **intended first public distribution date, 2026-10-27**, and
-says plainly that nothing had been distributed when that parameter was set. No version
-of Sparrow has been published yet. The actual first-distribution date is confirmed at
-publication, and it must not fall after the Change Date.
+`LICENSE` also records the **planned first public distribution date, 2026-10-27**, and
+records the actual first public distribution as `none`: no version of Sparrow has been
+published yet, and no actual date is claimed. The actual date is recorded at publication,
+and it must not fall after the Change Date.
 
 ## Third-party components have their own licences
 

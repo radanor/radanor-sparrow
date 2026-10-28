@@ -56,6 +56,26 @@ func TestCommunityWorkflowKeepsEveryGateTheSignedReleaseHas(t *testing.T) {
 	}
 }
 
+// TestCommunityWorkflowReportsWhichPlatformsProducedArtifacts pins the run's own
+// account of itself. The Windows job is skipped when its approval is absent, and a
+// skipped job leaves the run green; that is acceptable only if the run says so.
+// An approved Windows job that produced nothing is not an omission at all but a
+// contradiction, so it must fail the summary instead of passing quietly.
+func TestCommunityWorkflowReportsWhichPlatformsProducedArtifacts(t *testing.T) {
+	workflow := readCommunityWorkflow(t)
+	for _, required := range []struct{ needle, why string }{
+		{"needs.unsigned-linux-artifacts.result", "the summary must report the Linux job's outcome"},
+		{"needs.unsigned-windows-artifacts.result", "the summary must report the Windows job's outcome"},
+		{"vars.RADANOR_UNSIGNED_WINDOWS_DISTRIBUTION", "the summary must distinguish an unauthorized Windows run from a missing one"},
+		{"Linux-only distribution", "a run without Windows artifacts must say so rather than read as a cross-platform release"},
+		{"::error::Windows distribution is approved", "an approved but missing Windows job must fail the run, not pass silently"},
+	} {
+		if !strings.Contains(workflow, required.needle) {
+			t.Errorf("community-release.yml is missing %q: %s", required.needle, required.why)
+		}
+	}
+}
+
 // TestCommunityWorkflowCannotSignOrPublish pins the prohibitions. Each one has a
 // tempting shortcut — sign it anyway, reuse the production environment, publish the
 // release page from CI — and each would turn an honest unsigned distribution into a

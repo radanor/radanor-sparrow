@@ -7,6 +7,31 @@ the product, and it never records `PASS` for anything it did not natively execut
 
 Native Windows 11 / PowerShell 5.1 validation was completed on 2026-10-12: **82 PASS, 0 FAIL, 4 BLOCKED, 4 NOT RUN, 3 SIMULATED**. See the private engineering record for complete requirement evidence and outstanding manual checks. This run does not establish full CE-7A acceptance.
 
+## What a GitHub-hosted runner can and cannot demonstrate
+
+`.github/workflows/ci.yml` builds and exercises the Windows artifacts on a
+GitHub-hosted `windows-2025` runner, on **development** builds. That run is real, not
+simulated: it compiles the portable executable and the NSIS installer with the pinned
+toolchain, then runs the silent installer, resolves the installed Start Menu target,
+and exercises install, repair, staged-failure and killed-installer recovery,
+locked-file uninstall retry, uninstall and user-data preservation, with the
+unsigned-payload and disposable-signing checks under both Windows PowerShell 5.1 and
+PowerShell 7. Release-variant artifacts are produced only by
+`.github/workflows/community-release.yml` from an exact `vX.Y.Z` tag.
+
+It is **not** a substitute for the native run described here. A hosted runner has no
+interactive desktop and no standard-user interactive session, so the following are
+unexecuted there and must be recorded as `NOT RUN`, never inferred from a green job:
+
+* physical tray mouse interaction (`Invoke-SparrowTrayMouse.ps1`);
+* the installer UI and the standard-user (non-elevated) token path;
+* a real A-to-B upgrade from two different payloads — the headless lifecycle sets
+  A = B by design and logs that A-to-B is separate native acceptance;
+* downgrade refusal, which the lifecycle test runs only in its non-headless path;
+* the manual sub-steps listed at the end of this file (browser window opened,
+  elevation refusal, graceful Ctrl+C shutdown, Event Log channel clear, Defender
+  detection event).
+
 Run `Test-NativeHarness.ps1` for native HTTP transport, stage parsing and private ACL regressions (26 checks). Individual runtime stages automatically build/start/authenticate as needed. Comma-separated stage strings are normalized; invalid or empty selections fail. Always use a fresh GUID-named temp WorkRoot. Existing private children are preserved; root setup never recursively resets their ACLs.
 
 ## Files
