@@ -137,8 +137,9 @@ uses and the changeover, and
 
 > All four licence parameters in `LICENSE` are settled as of 2026-10-27: the Licensor
 > and copyright holder, the Change Date (2030-10-27, recorded together with the
-> **intended** first public distribution date of 2026-10-27 — no version has been
-> published yet), and the GPLv3 Change License. The third-party questions were closed on
+> **planned** first public distribution date of 2026-10-27 and an explicit statement
+> that the actual first public distribution is `none` — no version has been published
+> yet), and the GPLv3 Change License. The third-party questions were closed on
 > **2026-10-28** by the rights holder as a recorded **risk acceptance**: the LGPL and
 > header-derived readings stay legally uninterpreted, the notices shipped with the binary
 > say so, and no legal certification is claimed
