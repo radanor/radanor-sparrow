@@ -8,7 +8,10 @@ import (
 	"testing"
 )
 
-// The v0.1.0 public documentation set is checked here rather than trusted. These
+// The v0.1.1 public documentation set is checked here rather than trusted, and it is the
+// v0.1.0 set carried forward: v0.1.0 was tagged and never published, so the documents that
+// describe the release being published now name v0.1.1, while v0.1.0 survives as the
+// historical tag the checklist records. These
 // tests exist because a release document is a claim made to a stranger: it can be
 // wrong in ways no compiler catches — a link to a file that was renamed, a licence
 // date that drifted from LICENSE, an invented publisher, a plausible-looking hash
@@ -77,10 +80,10 @@ func TestReleaseDocumentsCarryTheirRequiredSections(t *testing.T) {
 			"Get-FileHash",
 			"sha256sum -c --strict",
 		},
-		"RELEASE_NOTES_V0_1_0.md": {
-			"# Radanor Sparrow Community Edition v0.1.0",
+		"RELEASE_NOTES_V0_1_1.md": {
+			"# Radanor Sparrow Community Edition v0.1.1",
 			"## What this release does",
-			"## Known limitations in v0.1.0",
+			"## Known limitations in v0.1.1",
 			"## Licensing",
 		},
 		"SUPPORT_AND_SECURITY_REPORTING.md": {
@@ -93,8 +96,8 @@ func TestReleaseDocumentsCarryTheirRequiredSections(t *testing.T) {
 			"## 2. The compliance change, and the documents this set defers to",
 			"## 3. The exact publication sequence, once every gate passes",
 		},
-		"GITHUB_RELEASE_V0_1_0.md": {
-			"## Radanor Sparrow Community Edition v0.1.0",
+		"GITHUB_RELEASE_V0_1_1.md": {
+			"## Radanor Sparrow Community Edition v0.1.1",
 			"### ⚠ This release is unsigned",
 			"### Verify before you run",
 			"### Licence",
@@ -189,7 +192,7 @@ func TestReleaseDocumentationKeepsTheApprovedLicenceIdentity(t *testing.T) {
 	// THIRD_PARTY_LICENSE_COMPLIANCE.md is deliberately not in this list: it covers the
 	// third-party material and points at LICENSE for the product's own terms, so
 	// requiring it to restate the Change Date would invite a second copy that drifts.
-	documents := []string{"COMMUNITY_LICENSE_GUIDE.md", "RELEASE_NOTES_V0_1_0.md", "GITHUB_RELEASE_V0_1_0.md"}
+	documents := []string{"COMMUNITY_LICENSE_GUIDE.md", "RELEASE_NOTES_V0_1_1.md", "GITHUB_RELEASE_V0_1_1.md"}
 	for _, name := range documents {
 		body := readReleaseDocFile(t, name)
 		for _, required := range []string{
@@ -254,7 +257,7 @@ func TestReleaseDocumentationPublishesNoUnverifiedValues(t *testing.T) {
 		if match := sha256LiteralRe.FindString(body); match != "" {
 			t.Errorf("%s contains the 64-character hex value %q; a digest may only be published from a real artifact, so the release template must keep it as a marked field", entry.Name(), match)
 		}
-		for _, fabricated := range []string{"releases/download/", "releases/tag/v0.1.0"} {
+		for _, fabricated := range []string{"releases/download/", "releases/tag/v0.1.1"} {
 			if strings.Contains(body, fabricated) {
 				t.Errorf("%s contains %q, which would be a download or tag URL for a release that does not exist", entry.Name(), fabricated)
 			}
@@ -263,10 +266,10 @@ func TestReleaseDocumentationPublishesNoUnverifiedValues(t *testing.T) {
 
 	// The template must still show where the real values go, or the fields would be
 	// silently dropped at publication time.
-	template := readReleaseDocFile(t, "GITHUB_RELEASE_V0_1_0.md")
+	template := readReleaseDocFile(t, "GITHUB_RELEASE_V0_1_1.md")
 	for _, marker := range []string{"⟨sha256 of RadanorSparrow.exe⟩", "⟨release-date⟩", "⟨issue-tracker-url⟩"} {
 		if !strings.Contains(template, marker) {
-			t.Errorf("GITHUB_RELEASE_V0_1_0.md must keep the field %s marked for filling at publication", marker)
+			t.Errorf("GITHUB_RELEASE_V0_1_1.md must keep the field %s marked for filling at publication", marker)
 		}
 	}
 }
@@ -290,7 +293,7 @@ func TestReleaseDocumentationStatesWhatIsNotYetTrue(t *testing.T) {
 		"not published",
 		"publication is not authorized",
 	}
-	for _, name := range []string{"README.md", "RELEASE_NOTES_V0_1_0.md", "GITHUB_RELEASE_V0_1_0.md", "FINAL_RELEASE_CHECKLIST.md", "THIRD_PARTY_LICENSE_COMPLIANCE.md"} {
+	for _, name := range []string{"README.md", "RELEASE_NOTES_V0_1_1.md", "GITHUB_RELEASE_V0_1_1.md", "FINAL_RELEASE_CHECKLIST.md", "THIRD_PARTY_LICENSE_COMPLIANCE.md"} {
 		body := collapseSpaces(strings.ToLower(readReleaseDocFile(t, name)))
 		found := false
 		for _, phrase := range notPublished {
@@ -306,7 +309,7 @@ func TestReleaseDocumentationStatesWhatIsNotYetTrue(t *testing.T) {
 
 	// Claims that would be false today. Exact strings, so honest prose about the
 	// absence of these things is not caught.
-	for _, name := range []string{"README.md", "RELEASE_NOTES_V0_1_0.md", "GITHUB_RELEASE_V0_1_0.md", "FINAL_RELEASE_CHECKLIST.md"} {
+	for _, name := range []string{"README.md", "RELEASE_NOTES_V0_1_1.md", "GITHUB_RELEASE_V0_1_1.md", "FINAL_RELEASE_CHECKLIST.md"} {
 		body := collapseSpaces(strings.ToLower(readReleaseDocFile(t, name)))
 		for _, claim := range []string{
 			"approved for publication",
@@ -378,8 +381,10 @@ var (
 )
 
 // TestReleaseDocumentationDoesNotInventAnotherVersion guards the version identity.
-// These documents describe 0.1.0; a stray product reference to a later release would
-// describe software that does not exist.
+// These documents describe 0.1.1; a stray product reference to a later release would
+// describe software that does not exist. 0.1.0 is allowed because it is a real, immutable
+// tag: it was created, its Windows build failed, and nothing was published from it, so
+// documents may still name it as that history.
 func TestReleaseDocumentationDoesNotInventAnotherVersion(t *testing.T) {
 	root := repoRoot(t)
 	dir := filepath.Join(root, releaseDocsDir)
@@ -387,6 +392,7 @@ func TestReleaseDocumentationDoesNotInventAnotherVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	known := map[string]bool{"0.1.0": true, "0.1.1": true}
 	checked := 0
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
@@ -396,8 +402,8 @@ func TestReleaseDocumentationDoesNotInventAnotherVersion(t *testing.T) {
 		for _, re := range []*regexp.Regexp{productFilenameVersionRe, productNameVersionRe} {
 			for _, match := range re.FindAllStringSubmatch(body, -1) {
 				checked++
-				if match[1] != "0.1.0" {
-					t.Errorf("%s refers to the product version %q, but these documents describe 0.1.0 only", entry.Name(), match[1])
+				if !known[match[1]] {
+					t.Errorf("%s refers to the product version %q, but these documents describe 0.1.1, with 0.1.0 retained only as the tag that was never published", entry.Name(), match[1])
 				}
 			}
 		}
@@ -405,8 +411,8 @@ func TestReleaseDocumentationDoesNotInventAnotherVersion(t *testing.T) {
 	if checked < 5 {
 		t.Fatalf("only %d product version references were found; the version scanner is not matching and would not catch a wrong release number", checked)
 	}
-	for _, name := range []string{"RELEASE_NOTES_V0_1_0.md", "GITHUB_RELEASE_V0_1_0.md", "FINAL_RELEASE_CHECKLIST.md"} {
-		if !strings.Contains(readReleaseDocFile(t, name), "0.1.0") {
+	for _, name := range []string{"RELEASE_NOTES_V0_1_1.md", "GITHUB_RELEASE_V0_1_1.md", "FINAL_RELEASE_CHECKLIST.md"} {
+		if !strings.Contains(readReleaseDocFile(t, name), "0.1.1") {
 			t.Errorf("%s must state the version it describes", name)
 		}
 	}

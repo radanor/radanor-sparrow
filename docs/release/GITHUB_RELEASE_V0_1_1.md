@@ -1,4 +1,4 @@
-# GitHub release description — v0.1.0
+# GitHub release description — v0.1.1
 
 **No release has been published.** This is a template: copy the block below into the
 GitHub release form when the release is authorized, and not before. Everything in
@@ -15,13 +15,13 @@ Fields that must be filled at publication:
 | `⟨release-notes-url⟩` | the URL of the notes once rendered |
 | `⟨issue-tracker-url⟩` | the repository's issue tracker URL |
 
-Tag: `v0.1.0`. Release title: **Radanor Sparrow Community Edition v0.1.0**. Attach the
+Tag: `v0.1.1`. Release title: **Radanor Sparrow Community Edition v0.1.1**. Attach the
 files listed in "Downloads" below, unmodified, straight from the release build — not
 renamed, not re-zipped, not rebuilt.
 
 ---
 
-## Radanor Sparrow Community Edition v0.1.0
+## Radanor Sparrow Community Edition v0.1.1
 
 **Release date:** ⟨release-date⟩
 
@@ -41,6 +41,9 @@ This is the first public release of the Community Edition. The product was devel
 tested as *Radanor Shield* until now; an existing installation is found in place, and its
 data is not migrated or orphaned.
 
+`v0.1.0` was tagged during preparation but never published — its Windows build failed, so
+no artifact from it exists and no download of it was ever offered.
+
 ### Downloads
 
 **Windows 11, 64-bit**
@@ -48,14 +51,14 @@ data is not migrated or orphaned.
 | File | Size | SHA-256 |
 | --- | --- | --- |
 | `RadanorSparrow.exe` — portable executable | ⟨bytes⟩ | ⟨sha256 of RadanorSparrow.exe⟩ |
-| `RadanorSparrow-0.1.0-setup.exe` — per-user installer | ⟨bytes⟩ | ⟨sha256 of RadanorSparrow-0.1.0-setup.exe⟩ |
+| `RadanorSparrow-0.1.1-setup.exe` — per-user installer | ⟨bytes⟩ | ⟨sha256 of RadanorSparrow-0.1.1-setup.exe⟩ |
 | `SHA256SUMS.windows` | ⟨bytes⟩ | ⟨sha256 of SHA256SUMS.windows⟩ |
 
 **Ubuntu 22.04 / 24.04 / 26.04, x86-64**
 
 | File | Size | SHA-256 |
 | --- | --- | --- |
-| `RadanorSparrow-0.1.0-x86_64.AppImage` — native-window desktop app | ⟨bytes⟩ | ⟨sha256 of the AppImage⟩ |
+| `RadanorSparrow-0.1.1-x86_64.AppImage` — native-window desktop app | ⟨bytes⟩ | ⟨sha256 of the AppImage⟩ |
 | `radanor-sparrow` — portable supervisor, no GTK/WebKitGTK required | ⟨bytes⟩ | ⟨sha256 of radanor-sparrow⟩ |
 | `SHA256SUMS.appimage` | ⟨bytes⟩ | ⟨sha256 of SHA256SUMS.appimage⟩ |
 | `SHA256SUMS.portable` | ⟨bytes⟩ | ⟨sha256 of SHA256SUMS.portable⟩ |
@@ -137,7 +140,7 @@ browser instead. That is designed behaviour, not a fault.
   a human visual check.
 - Monitoring and assessment only: no malware detection, blocking or removal.
 
-Full notes: [`RELEASE_NOTES_V0_1_0.md`](RELEASE_NOTES_V0_1_0.md).
+Full notes: [`RELEASE_NOTES_V0_1_1.md`](RELEASE_NOTES_V0_1_1.md).
 
 ### Privacy
 

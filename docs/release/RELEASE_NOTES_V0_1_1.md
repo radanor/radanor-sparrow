@@ -1,12 +1,20 @@
-# Radanor Sparrow Community Edition v0.1.0
+# Radanor Sparrow Community Edition v0.1.1
 
 **Release date:** set at publication.
 
-**Status: prepared, not published.** These notes describe the v0.1.0 release. No v0.1.0
-artifact has been built from a tag, tagged or published yet, and publication is gated on
-the items in [`FINAL_RELEASE_CHECKLIST.md`](FINAL_RELEASE_CHECKLIST.md). Where a value
-only exists once the release is published — the date, the artifact hashes — these notes
-say so rather than filling it in.
+**Status: prepared, not published.** These notes describe the v0.1.1 release candidate.
+No v0.1.1 artifact has been published, and publication is gated on the items in
+[`FINAL_RELEASE_CHECKLIST.md`](FINAL_RELEASE_CHECKLIST.md). Where a value only exists once
+the release is published — the date, the artifact hashes — these notes say so rather than
+filling it in.
+
+**Why v0.1.1 and not v0.1.0.** `v0.1.0` was tagged on 2026-10-28 at `45f44ef`, but its
+Community workflow failed while building the Windows installer: that checkout materialised
+the embedded dashboard bundle with CRLF line endings, the frontend build rewrote it with
+LF, and the release version rule then refused the tag as a checkout with uncommitted
+changes. Nothing was published from `v0.1.0` — no GitHub Release and no binary — and the
+tag is preserved unchanged as the record of that attempt. `v0.1.1` carries the same product
+content from a commit that fixes that packaging defect.
 
 ## Overview
 
@@ -19,7 +27,7 @@ It runs as your ordinary user account in two local processes, keeps its data in 
 profile, needs no account or service, and sends nothing off the computer. It also does
 not need administrator rights on either platform, and refuses to run elevated.
 
-**v0.1.0 is the first public release of the Community Edition** under the product's new
+**v0.1.1 is the first public release of the Community Edition** under the product's new
 name. It was previously developed and tested as *Radanor Shield*; the data directory,
 single-instance lock and environment variables keep their old `radanor-shield` names so
 an existing installation is found in place rather than orphaned.
@@ -58,7 +66,7 @@ Supported: **Windows 11, x64**.
 | | |
 | --- | --- |
 | `RadanorSparrow.exe` | portable executable, nothing installed |
-| `RadanorSparrow-0.1.0-setup.exe` | per-user NSIS installer |
+| `RadanorSparrow-0.1.1-setup.exe` | per-user NSIS installer |
 
 - Per-user installation into `%LOCALAPPDATA%\Programs\Radanor Sparrow`, with a Start Menu
   shortcut and an uninstall entry in HKCU. **No administrator rights**, no service, no
@@ -84,7 +92,7 @@ Supported: **Ubuntu 22.04, 24.04 and 26.04, x86-64**.
 
 | | |
 | --- | --- |
-| `RadanorSparrow-0.1.0-x86_64.AppImage` | the desktop application: supervisor **and** the native window component |
+| `RadanorSparrow-0.1.1-x86_64.AppImage` | the desktop application: supervisor **and** the native window component |
 | `radanor-sparrow` | portable supervisor, no GTK/WebKitGTK needed |
 
 - **Native window** with the WebKit renderer inside its bubblewrap sandbox. GTK 3 and
@@ -140,7 +148,7 @@ account, no update channel.
   state directory keeps its `radanor-shield` / `Radanor\Shield` name, as do the
   single-instance lock and the `RADANOR_SHIELD_*` environment variables. Nothing is
   migrated and nothing is orphaned.
-- **From v0.1.0 to a later version:** manual. There is no auto-updater and no update
+- **From v0.1.1 to a later version:** manual. There is no auto-updater and no update
   channel; replacing the file after verifying its checksum is the supported update path.
 - **Database schema:** only ever gains tables. A build that finds a *newer* schema than it
   understands refuses to start rather than damaging it, so a rollback to an older build
@@ -148,7 +156,7 @@ account, no update channel.
 - **Windows:** uninstall keeps your data. Going backwards through versions is refused by
   design; uninstall deliberately first if you mean to.
 
-## Known limitations in v0.1.0
+## Known limitations in v0.1.1
 
 Stated because they are true, not as a caveat list to be skimmed:
 
